@@ -1,0 +1,17 @@
+{
+  "name": "zanile-clipboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal web text clipboard on Cloudflare Workers (zanile.com)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types": "echo Types installed via @cloudflare/workers-types",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240512.0",
+    "typescript": "^5.4.0",
+    "wrangler": "^4.28.1"
+  }
+}

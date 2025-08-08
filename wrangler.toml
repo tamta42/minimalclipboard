@@ -1,0 +1,21 @@
+name = "zanile-clipboard"
+main = "src/index.ts"
+compatibility_date = "2024-05-12"
+
+# KV namespaces are added after authentication to avoid validation errors during login.
+# After logging in and creating the namespace, re-add this block with real IDs:
+# [[kv_namespaces]]
+# binding = "NOTES"
+# id = "<production_id>"
+# preview_id = "<preview_id>"
+
+# To use a custom domain in your zone, uncomment and set your zone
+# routes = [
+#   { pattern = "zanile.com/*", zone_name = "zanile.com" }
+# ]
+
+[vars]
+DEFAULT_TTL_SECONDS = 0 # 0 means no TTL; set e.g. 2592000 for 30 days
+MAX_BYTES = 100000
+
+
