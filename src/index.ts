@@ -30,6 +30,7 @@ const HTML = `<!DOCTYPE html>
 <body>
   <header>
     <h1>zanile clipboard</h1>
+    <nav><a href="/about">About</a></nav>
   </header>
   <form id="form">
     <textarea id="text" placeholder="Paste or type text..."></textarea>
@@ -78,6 +79,11 @@ export default {
 
     if (request.method === 'GET' && (path === '/' || path === '/index.html')) {
       return new Response(HTML, { headers: { 'content-type': 'text/html; charset=UTF-8' } });
+    }
+
+    if (request.method === 'GET' && path === '/about') {
+      const page = renderAboutPage();
+      return new Response(page, { headers: { 'content-type': 'text/html; charset=UTF-8' } });
     }
 
     if (request.method === 'POST' && path === '/api/create') {
@@ -205,6 +211,50 @@ function renderViewPage(id: string, text: string, reqUrl: string): string {
   </div>
 </body>
 </html>`;
+}
+
+function renderAboutPage(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>About - zanile clipboard</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { max-width: 800px; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    h1 { margin: 0 0 1rem; font-size: 1.4rem; }
+    p { line-height: 1.6; }
+    ul { line-height: 1.6; }
+    a.button { display: inline-block; margin-top: 1rem; padding: .6rem .9rem; border-radius: .5rem; border: 1px solid #8885; background: #09f; color: white; text-decoration: none; }
+  </style>
+  <meta name="description" content="About this minimalist clipboard app" />
+  <link rel="canonical" href="/about" />
+  </head>
+  <body>
+    <header>
+      <h1>About</h1>
+      <nav><a href="/">Home</a></nav>
+    </header>
+    <p>
+      I often use simple paste-and-share apps like justpaste.it, but they are sometimes blocked or unavailable.
+      So I decided to build a tiny, reliable version for myself.
+    </p>
+    <p>
+      This entire site was created from a single prompt using Cursor and one of the best-available LLMs at the time.
+    </p>
+    <h2>Tech stack</h2>
+    <ul>
+      <li><strong>Cloudflare Workers</strong>: serverless runtime that serves the app globally</li>
+      <li><strong>Cloudflare KV</strong>: key-value storage for notes</li>
+      <li><strong>TypeScript</strong> with the Workers runtime types</li>
+      <li><strong>Wrangler</strong> for local dev and deploy</li>
+      <li><strong>Vanilla HTML/CSS/JS</strong> for a zero-dependency UI</li>
+    </ul>
+    <a class="button" href="/">Create a new note</a>
+  </body>
+  </html>`;
 }
 
 
