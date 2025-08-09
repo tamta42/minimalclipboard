@@ -253,7 +253,7 @@ function renderAboutPage(): string {
       <li><strong>Vanilla HTML/CSS/JS</strong> for a zero-dependency UI</li>
     </ul>
     <a class="button" href="/">Create a new note</a>
-    <p><small>Minor deployment test.</small></p>
+    <p><small>Minor deployment test v2.</small></p>
   </body>
   </html>`;
 }
