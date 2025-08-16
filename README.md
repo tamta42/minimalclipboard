@@ -1,15 +1,17 @@
 ## Zanile Minimal Clipboard (Cloudflare Worker)
 
-A minimalist web text clipboard like wepaste.it. Users can paste text, save, and share via a short URL.
+A minimalist web text clipboard like justpaste.it. Users can paste text, save, and share via a short URL.
 
 ### Stack
-- Cloudflare Workers (Modules)
+- Cloudflare Workers (TypeScript/ES Modules)
 - Cloudflare KV for storage
+- Vanilla HTML/CSS/JS (zero dependencies)
 
 ### Local Dev
 1. Install Node.js 18+ and Cloudflare Wrangler (`npm i -g wrangler` or use `npx`).
 2. Install deps: `npm install`
 3. Dev server: `npm run dev`
+4. Type check: `npm run check`
 
 ### Deploy
 1. Authenticate: `npx wrangler login`
@@ -30,6 +32,10 @@ Then republish.
 
 ### Notes
 - Max payload enforced server-side to protect KV (default 100KB).
-- Entries are given an 8-char base62 ID. Collisions are retried.
-- Set TTL via `DEFAULT_TTL_SECONDS` in `src/index.ts` if you want auto-expiry.
-i've always wanted something like justpaste.it with full control of it for myself
+- Entries are given an 8-char random ID (a-z, 0-9). Collisions are retried with longer IDs.
+- Set TTL via `DEFAULT_TTL_SECONDS` in `wrangler.toml` if you want auto-expiry (0 = no expiry).
+- Custom IDs supported: alphanumeric + hyphens, max 64 chars.
+- Raw text access via `/raw/{id}` endpoint.
+- About page available at `/about`.
+
+Built because I've always wanted something like justpaste.it with full control.
