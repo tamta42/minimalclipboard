@@ -4,10 +4,10 @@ compatibility_date = "2024-05-12"
 
 # KV namespaces are added after authentication to avoid validation errors during login.
 # After logging in and creating the namespace, re-add this block with real IDs:
-# [[kv_namespaces]]
-# binding = "NOTES"
-# id = "<production_id>"
-# preview_id = "<preview_id>"
+[[kv_namespaces]]
+binding = "NOTES"
+id = "3b182a755a0048bf834a600e8cd7f971"
+preview_id = "8a6ed224993946a6b9b98099860a9973"
 
 # To use a custom domain in your zone, uncomment and set your zone
 # routes = [
