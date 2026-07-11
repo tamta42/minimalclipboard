@@ -15,7 +15,7 @@ preview_id = "8a6ed224993946a6b9b98099860a9973"
 # ]
 
 [vars]
-DEFAULT_TTL_SECONDS = 0 # 0 means no TTL; set e.g. 2592000 for 30 days
+DEFAULT_TTL_SECONDS = 2592000 # 30 days
 MAX_BYTES = 100000
 
 
