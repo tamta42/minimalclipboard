@@ -4,42 +4,157 @@ export interface Env {
   MAX_BYTES: number; // payload size guard
 }
 
+const BRAND_HEAD = `
+  <link rel="stylesheet" href="https://congtam.net/assets/tamta-tokens.css">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="icon" href="https://congtam.net/assets/mark-tile.svg">
+`;
+
+const SHARED_CSS = `
+  * { box-sizing: border-box; }
+  body {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem 1rem 4rem;
+    font-family: var(--tt-font-display);
+    background: var(--tt-paper);
+    color: var(--tt-ink);
+    line-height: 1.5;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--tt-line);
+  }
+  h1 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--tt-blue);
+  }
+  nav a {
+    color: var(--tt-muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+  }
+  nav a:hover { color: var(--tt-blue); }
+  label.label {
+    display: block;
+    font-family: var(--tt-font-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--tt-muted);
+    margin-bottom: 0.4rem;
+  }
+  textarea, input[type="text"] {
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: var(--tt-radius);
+    border: 1px solid var(--tt-line);
+    background: var(--tt-paper);
+    color: var(--tt-ink);
+    font-family: var(--tt-font-mono);
+    font-size: 0.875rem;
+  }
+  textarea {
+    min-height: 50vh;
+    resize: vertical;
+  }
+  textarea:focus, input[type="text"]:focus {
+    outline: 2px solid var(--tt-blue);
+    outline-offset: 1px;
+  }
+  .row {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .row > * { flex: 1; min-width: 0; }
+  button, a.button {
+    display: inline-block;
+    padding: 0.6rem 0.9rem;
+    border-radius: var(--tt-radius);
+    border: 1px solid var(--tt-blue);
+    background: var(--tt-blue);
+    color: var(--tt-paper);
+    font-family: var(--tt-font-display);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+  }
+  button.primary, a.button.primary {
+    background: var(--tt-clay);
+    border-color: var(--tt-clay);
+    color: var(--tt-paper);
+  }
+  button.secondary, a.button.secondary {
+    background: transparent;
+    color: var(--tt-blue);
+    border-color: var(--tt-line);
+  }
+  button.secondary:hover, a.button.secondary:hover {
+    border-color: var(--tt-blue);
+  }
+  .note {
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--tt-muted);
+  }
+  .link { margin-top: 0.75rem; }
+  .link a { color: var(--tt-blue); }
+  .err { color: var(--tt-clay); margin-top: 0.5rem; font-size: 0.9rem; }
+  pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    padding: 1rem;
+    border-radius: var(--tt-radius);
+    border: 1px solid var(--tt-line);
+    background: var(--tt-paper);
+    font-family: var(--tt-font-mono);
+    font-size: 0.875rem;
+    color: var(--tt-ink);
+  }
+  p { color: var(--tt-ink); max-width: 40rem; }
+  a { color: var(--tt-blue); }
+  a:hover { color: var(--tt-clay); }
+`;
+
 const HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>zanile clipboard</title>
-  <style>
-    :root { color-scheme: light dark; }
-    body { max-width: 800px; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; }
-    header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-    h1 { margin: 0; font-size: 1.2rem; }
-    textarea { width: 100%; min-height: 50vh; font: 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: .75rem; border-radius: .5rem; border: 1px solid #8883; }
-    .row { display: flex; gap: .5rem; margin-top: .75rem; }
-    .row > * { flex: 1; }
-    button { padding: .6rem .9rem; border-radius: .5rem; border: 1px solid #8885; background: #09f; color: white; cursor: pointer; }
-    button.secondary { background: transparent; color: inherit; }
-    .note { margin-top: .5rem; font-size: .9rem; opacity: .75; }
-    input[type="text"] { width: 100%; padding: .6rem .7rem; border-radius: .5rem; border: 1px solid #8883; }
-    .link { margin-top: .75rem; }
-    .err { color: #c00; }
-  </style>
-  <meta name="description" content="Minimalist web text clipboard." />
+  <title>Clipboard</title>
+  ${BRAND_HEAD}
+  <style>${SHARED_CSS}</style>
+  <meta name="description" content="Minimal web text clipboard." />
 </head>
 <body>
   <header>
-    <h1>zanile clipboard</h1>
+    <h1>Clipboard</h1>
     <nav><a href="/about">About</a></nav>
   </header>
   <form id="form">
-    <textarea id="text" placeholder="Paste or type text..."></textarea>
+    <label class="label" for="text">Text</label>
+    <textarea id="text" placeholder="Paste or type text…"></textarea>
     <div class="row">
-      <button id="save" type="submit">Save</button>
+      <button id="save" class="primary" type="submit">Save</button>
       <button id="clear" class="secondary" type="button">Clear</button>
     </div>
     <div class="row">
-      <input id="id" type="text" placeholder="Optional custom ID (a–z, 0–9, -), default random" />
+      <div>
+        <label class="label" for="id">Custom ID</label>
+        <input id="id" type="text" placeholder="Optional (a–z, 0–9, -), default random" />
+      </div>
     </div>
     <div class="note">Max 100 KB. Your note gets a shareable URL.</div>
     <div id="result" class="link"></div>
@@ -147,7 +262,6 @@ async function generateUniqueId(kv: KVNamespace): Promise<string> {
     const exists = await kv.get(id);
     if (!exists) return id;
   }
-  // Fallback to longer id if unlucky
   for (let attempt = 0; attempt < 5; attempt++) {
     const id = randomId(12);
     const exists = await kv.get(id);
@@ -188,26 +302,22 @@ function renderViewPage(id: string, text: string, reqUrl: string): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${id} - zanile</title>
-  <style>
-    :root { color-scheme: light dark; }
-    body { max-width: 800px; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; }
-    pre { white-space: pre-wrap; word-wrap: break-word; background: #00000008; padding: 1rem; border-radius: .5rem; border: 1px solid #8883; }
-    .row { display: flex; gap: .5rem; margin-top: .75rem; }
-    input { flex: 1; padding: .6rem .7rem; border-radius: .5rem; border: 1px solid #8883; }
-    button { padding: .6rem .9rem; border-radius: .5rem; border: 1px solid #8885; background: #09f; color: white; cursor: pointer; }
-    a.button { text-decoration: none; display: inline-block; }
-  </style>
-  <meta name="description" content="Shared note ${id}" />
+  <title>${escapeHtml(id)} — Clipboard</title>
+  ${BRAND_HEAD}
+  <style>${SHARED_CSS}</style>
+  <meta name="description" content="Shared note ${escapeHtml(id)}" />
 </head>
 <body>
-  <h1>note ${id}</h1>
+  <header>
+    <h1>Note <span style="font-family:var(--tt-font-mono);font-weight:400;font-size:0.9em">${escapeHtml(id)}</span></h1>
+    <nav><a href="/">New</a></nav>
+  </header>
   <pre>${escaped}</pre>
   <div class="row">
-    <input id="share" value="${shareUrl}" readonly />
-    <button onclick="navigator.clipboard.writeText('${shareUrl}')">Copy URL</button>
-    <a class="button" href="/">New</a>
-    <a class="button" href="${rawUrl}">Raw</a>
+    <input id="share" value="${escapeHtml(shareUrl)}" readonly />
+    <button class="primary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('share').value)">Copy URL</button>
+    <a class="button secondary" href="/">New</a>
+    <a class="button secondary" href="${escapeHtml(rawUrl)}">Raw</a>
   </div>
 </body>
 </html>`;
@@ -219,43 +329,33 @@ function renderAboutPage(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>About - zanile clipboard</title>
-  <style>
-    :root { color-scheme: light dark; }
-    body { max-width: 800px; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; }
-    header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-    h1 { margin: 0 0 1rem; font-size: 1.4rem; }
-    p { line-height: 1.6; }
-    ul { line-height: 1.6; }
-    a.button { display: inline-block; margin-top: 1rem; padding: .6rem .9rem; border-radius: .5rem; border: 1px solid #8885; background: #09f; color: white; text-decoration: none; }
-  </style>
+  <title>About — Clipboard</title>
+  ${BRAND_HEAD}
+  <style>${SHARED_CSS}</style>
   <meta name="description" content="About this minimalist clipboard app" />
   <link rel="canonical" href="/about" />
-  </head>
-  <body>
-    <header>
-      <h1>About</h1>
-      <nav><a href="/">Home</a></nav>
-    </header>
-    <p>
-      I often use simple paste-and-share apps like justpaste.it, but they are sometimes blocked or unavailable.
-      So I decided to build a tiny, reliable version for myself.
-    </p>
-    <p>
-      This entire site was created from a single prompt using Cursor and one of the best-available LLMs at the time.
-    </p>
-    <h2>Tech stack</h2>
-    <ul>
-      <li><strong>Cloudflare Workers</strong>: serverless runtime that serves the app globally</li>
-      <li><strong>Cloudflare KV</strong>: key-value storage for notes</li>
-      <li><strong>TypeScript</strong> with the Workers runtime types</li>
-      <li><strong>Wrangler</strong> for local dev and deploy</li>
-      <li><strong>Vanilla HTML/CSS/JS</strong> for a zero-dependency UI</li>
-    </ul>
-    <a class="button" href="/">Create a new note</a>
-    <p><small>Minor deployment test v2.</small></p>
-  </body>
-  </html>`;
+</head>
+<body>
+  <header>
+    <h1>About</h1>
+    <nav><a href="/">Home</a></nav>
+  </header>
+  <p>
+    I often use simple paste-and-share apps like justpaste.it, but they are sometimes blocked or unavailable.
+    So I decided to build a tiny, reliable version for myself.
+  </p>
+  <p>
+    This entire site was created from a single prompt using Cursor and one of the best-available LLMs at the time.
+  </p>
+  <h2 style="font-size:1.1rem;color:var(--tt-blue)">Tech stack</h2>
+  <ul style="color:var(--tt-ink);line-height:1.6">
+    <li><strong>Cloudflare Workers</strong>: serverless runtime that serves the app globally</li>
+    <li><strong>Cloudflare KV</strong>: key-value storage for notes</li>
+    <li><strong>TypeScript</strong> with the Workers runtime types</li>
+    <li><strong>Wrangler</strong> for local dev and deploy</li>
+    <li><strong>Vanilla HTML/CSS/JS</strong> for a zero-dependency UI</li>
+  </ul>
+  <a class="button primary" href="/">Create a new note</a>
+</body>
+</html>`;
 }
-
-
