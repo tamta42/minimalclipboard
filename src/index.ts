@@ -121,6 +121,15 @@ const SHARED_CSS = `
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--tt-line);
   }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: var(--tt-blue);
+    text-decoration: none;
+    min-width: 0;
+  }
+  .brand img { width: 28px; height: 28px; border-radius: var(--tt-radius); flex-shrink: 0; }
   h1 {
     margin: 0;
     font-size: 1.25rem;
@@ -262,7 +271,7 @@ const HTML = `<!DOCTYPE html>
 </head>
 <body>
   <header>
-    <h1>Clipboard</h1>
+    <a class="brand" href="/"><img src="https://congtam.net/assets/mark-tile.svg" alt="" width="28" height="28" /><h1>Clipboard</h1></a>
     ${NAV}
   </header>
   <main>
@@ -470,7 +479,7 @@ function renderViewPage(id: string, text: string, reqUrl: string): string {
 </head>
 <body>
   <header>
-    <h1>Note <span style="font-family:var(--tt-font-mono);font-weight:400;font-size:0.9em">${escapeHtml(id)}</span></h1>
+    <a class="brand" href="/"><img src="https://congtam.net/assets/mark-tile.svg" alt="" width="28" height="28" /><h1>Note <span style="font-family:var(--tt-font-mono);font-weight:400;font-size:0.9em">${escapeHtml(id)}</span></h1></a>
     ${NAV}
   </header>
   <main>
@@ -502,7 +511,7 @@ function renderAboutPage(): string {
 </head>
 <body>
   <header>
-    <h1>About</h1>
+    <a class="brand" href="/"><img src="https://congtam.net/assets/mark-tile.svg" alt="" width="28" height="28" /><h1>About</h1></a>
     ${NAV}
   </header>
   <main>
@@ -531,7 +540,7 @@ function renderPrivacyPage(): string {
 </head>
 <body>
   <header>
-    <h1>Privacy</h1>
+    <a class="brand" href="/"><img src="https://congtam.net/assets/mark-tile.svg" alt="" width="28" height="28" /><h1>Privacy</h1></a>
     ${NAV}
   </header>
   <main>
@@ -558,7 +567,7 @@ function renderNotFoundPage(): string {
 </head>
 <body>
   <header>
-    <h1>Not found</h1>
+    <a class="brand" href="/"><img src="https://congtam.net/assets/mark-tile.svg" alt="" width="28" height="28" /><h1>Not found</h1></a>
     ${NAV}
   </header>
   <main>
