@@ -2,6 +2,7 @@ export interface Env {
   NOTES: KVNamespace;
   DEFAULT_TTL_SECONDS: number; // 0 for none
   MAX_BYTES: number; // payload size guard
+  WRITE_RATE_LIMITER: RateLimit;
 }
 
 const BRAND_HEAD = `
@@ -243,6 +244,12 @@ export default {
 
     if (request.method === 'POST' && path === '/api/create') {
       try {
+        const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+        const { success } = await env.WRITE_RATE_LIMITER.limit({ key: ip });
+        if (!success) {
+          return json({ error: 'Too many requests. Paste creation is limited to 10 per minute.' }, 429);
+        }
+
         const body = await request.json<any>();
         const text: string = typeof body?.text === 'string' ? body.text : '';
         let id: string | undefined = typeof body?.id === 'string' ? body.id : undefined;
