@@ -20,7 +20,11 @@ const SHARED_CSS = `
     background: var(--tt-paper);
     color: var(--tt-ink);
     line-height: 1.5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
+  main { flex: 1; }
   header {
     display: flex;
     align-items: center;
@@ -36,6 +40,7 @@ const SHARED_CSS = `
     font-weight: 600;
     color: var(--tt-blue);
   }
+  nav { display: flex; gap: 1rem; }
   nav a {
     color: var(--tt-muted);
     text-decoration: none;
@@ -126,7 +131,36 @@ const SHARED_CSS = `
   p { color: var(--tt-ink); max-width: 40rem; }
   a { color: var(--tt-blue); }
   a:hover { color: var(--tt-clay); }
+  footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--tt-line);
+    font-size: 0.8rem;
+  }
+  footer a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--tt-muted);
+    text-decoration: none;
+  }
+  footer a:hover { color: var(--tt-blue); }
+  footer img { width: 16px; height: 16px; border-radius: 3px; }
 `;
+
+const FOOTER = `
+<footer>
+  <a href="https://congtam.net">
+    <img src="https://congtam.net/assets/mark-tile.svg" alt="" width="16" height="16" />
+    congtam.net
+  </a>
+</footer>`;
+
+const NAV = `
+<nav>
+  <a href="/about">About</a>
+  <a href="/privacy">Privacy</a>
+</nav>`;
 
 const HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -141,8 +175,9 @@ const HTML = `<!DOCTYPE html>
 <body>
   <header>
     <h1>Clipboard</h1>
-    <nav><a href="/about">About</a></nav>
+    ${NAV}
   </header>
+  <main>
   <form id="form">
     <label class="label" for="text">Text</label>
     <textarea id="text" placeholder="Paste or type text…"></textarea>
@@ -160,6 +195,8 @@ const HTML = `<!DOCTYPE html>
     <div id="result" class="link"></div>
     <div id="error" class="err"></div>
   </form>
+  </main>
+  ${FOOTER}
   <script>
     const form = document.getElementById('form');
     const text = document.getElementById('text');
@@ -193,12 +230,15 @@ export default {
     const path = url.pathname;
 
     if (request.method === 'GET' && (path === '/' || path === '/index.html')) {
-      return new Response(HTML, { headers: { 'content-type': 'text/html; charset=UTF-8' } });
+      return html(HTML);
     }
 
     if (request.method === 'GET' && path === '/about') {
-      const page = renderAboutPage();
-      return new Response(page, { headers: { 'content-type': 'text/html; charset=UTF-8' } });
+      return html(renderAboutPage());
+    }
+
+    if (request.method === 'GET' && path === '/privacy') {
+      return html(renderPrivacyPage());
     }
 
     if (request.method === 'POST' && path === '/api/create') {
@@ -233,21 +273,31 @@ export default {
     if (request.method === 'GET' && path.startsWith('/raw/')) {
       const id = path.slice('/raw/'.length);
       const value = await env.NOTES.get(id);
-      if (value == null) return new Response('Not found', { status: 404 });
+      if (value == null) return html(renderNotFoundPage(), 404);
       return new Response(value, { headers: { 'content-type': 'text/plain; charset=UTF-8' } });
     }
 
     if (request.method === 'GET' && path !== '/') {
+      // Reserved paths already handled above
       const id = path.replace(/^\//, '');
+      if (id === 'about' || id === 'privacy') {
+        return html(renderNotFoundPage(), 404);
+      }
       const value = await env.NOTES.get(id);
-      if (value == null) return new Response('Not found', { status: 404 });
-      const page = renderViewPage(id, value, request.url);
-      return new Response(page, { headers: { 'content-type': 'text/html; charset=UTF-8' } });
+      if (value == null) return html(renderNotFoundPage(), 404);
+      return html(renderViewPage(id, value, request.url));
     }
 
-    return new Response('Not found', { status: 404 });
+    return html(renderNotFoundPage(), 404);
   },
 } satisfies ExportedHandler<Env>;
+
+function html(body: string, status = 200): Response {
+  return new Response(body, {
+    status,
+    headers: { 'content-type': 'text/html; charset=UTF-8' },
+  });
+}
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -310,8 +360,9 @@ function renderViewPage(id: string, text: string, reqUrl: string): string {
 <body>
   <header>
     <h1>Note <span style="font-family:var(--tt-font-mono);font-weight:400;font-size:0.9em">${escapeHtml(id)}</span></h1>
-    <nav><a href="/">New</a></nav>
+    ${NAV}
   </header>
+  <main>
   <pre>${escaped}</pre>
   <div class="row">
     <input id="share" value="${escapeHtml(shareUrl)}" readonly />
@@ -319,6 +370,8 @@ function renderViewPage(id: string, text: string, reqUrl: string): string {
     <a class="button secondary" href="/">New</a>
     <a class="button secondary" href="${escapeHtml(rawUrl)}">Raw</a>
   </div>
+  </main>
+  ${FOOTER}
 </body>
 </html>`;
 }
@@ -332,30 +385,73 @@ function renderAboutPage(): string {
   <title>About — Clipboard</title>
   ${BRAND_HEAD}
   <style>${SHARED_CSS}</style>
-  <meta name="description" content="About this minimalist clipboard app" />
+  <meta name="description" content="About Clipboard, a minimal paste-and-share tool." />
   <link rel="canonical" href="/about" />
 </head>
 <body>
   <header>
     <h1>About</h1>
-    <nav><a href="/">Home</a></nav>
+    ${NAV}
   </header>
-  <p>
-    I often use simple paste-and-share apps like justpaste.it, but they are sometimes blocked or unavailable.
-    So I decided to build a tiny, reliable version for myself.
-  </p>
-  <p>
-    This entire site was created from a single prompt using Cursor and one of the best-available LLMs at the time.
-  </p>
-  <h2 style="font-size:1.1rem;color:var(--tt-blue)">Tech stack</h2>
-  <ul style="color:var(--tt-ink);line-height:1.6">
-    <li><strong>Cloudflare Workers</strong>: serverless runtime that serves the app globally</li>
-    <li><strong>Cloudflare KV</strong>: key-value storage for notes</li>
-    <li><strong>TypeScript</strong> with the Workers runtime types</li>
-    <li><strong>Wrangler</strong> for local dev and deploy</li>
-    <li><strong>Vanilla HTML/CSS/JS</strong> for a zero-dependency UI</li>
-  </ul>
-  <a class="button primary" href="/">Create a new note</a>
+  <main>
+  <p>Clipboard is a minimal paste-and-share tool. Paste text, get a URL, send the link.</p>
+  <p>It is part of the <a href="https://congtam.net">congtam.net</a> portfolio. No accounts, no tracking pixels, no ads.</p>
+  <p>Notes live in Cloudflare KV and expire after 30 days by default. See <a href="/privacy">Privacy</a> for retention detail.</p>
+  <p><a class="button primary" href="/">Create a note</a></p>
+  </main>
+  ${FOOTER}
+</body>
+</html>`;
+}
+
+function renderPrivacyPage(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy — Clipboard</title>
+  ${BRAND_HEAD}
+  <style>${SHARED_CSS}</style>
+  <meta name="description" content="Privacy policy for Clipboard." />
+  <link rel="canonical" href="/privacy" />
+</head>
+<body>
+  <header>
+    <h1>Privacy</h1>
+    ${NAV}
+  </header>
+  <main>
+  <p>No third-party trackers or ads. The app runs entirely on Cloudflare.</p>
+  <p>Pastes are stored in Cloudflare KV for 30 days by default, then auto-deleted. Custom IDs follow the same retention.</p>
+  <p>This app does not retain IP addresses beyond Cloudflare’s own edge logs. Paste content is never written to analytics.</p>
+  <p><a class="button primary" href="/">Home</a></p>
+  </main>
+  ${FOOTER}
+</body>
+</html>`;
+}
+
+function renderNotFoundPage(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Not found — Clipboard</title>
+  ${BRAND_HEAD}
+  <style>${SHARED_CSS}</style>
+</head>
+<body>
+  <header>
+    <h1>Not found</h1>
+    ${NAV}
+  </header>
+  <main>
+  <p>No note exists at this URL. It may have expired or never been created.</p>
+  <p><a class="button primary" href="/">Create a note</a></p>
+  </main>
+  ${FOOTER}
 </body>
 </html>`;
 }
