@@ -7,6 +7,11 @@ binding = "NOTES"
 id = "3b182a755a0048bf834a600e8cd7f971"
 preview_id = "8a6ed224993946a6b9b98099860a9973"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "zanile-auth"
+database_id = "4f344ad6-a3a2-48c4-aa12-576c383bfe88"
+
 # To use a custom domain in your zone, uncomment and set your zone
 # routes = [
 #   { pattern = "zanile.com/*", zone_name = "zanile.com" }
@@ -15,6 +20,7 @@ preview_id = "8a6ed224993946a6b9b98099860a9973"
 [vars]
 DEFAULT_TTL_SECONDS = 2592000 # 30 days
 MAX_BYTES = 100000
+ENVIRONMENT = "production"
 
 [[ratelimits]]
 name = "WRITE_RATE_LIMITER"
@@ -23,9 +29,19 @@ namespace_id = "1001"
 limit = 10
 period = 60
 
+[[ratelimits]]
+name = "AUTH_RATE_LIMITER"
+namespace_id = "1002"
+[ratelimits.simple]
+limit = 5
+period = 60
+
 [[analytics_engine_datasets]]
 binding = "TRAFFIC"
 dataset = "clipboard_traffic"
 
 [observability.logs]
 enabled = true
+
+# Secrets via wrangler secret put:
+# AUTH_COOKIE_SECRET, RESEND_API_KEY
