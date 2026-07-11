@@ -6,13 +6,98 @@ export interface Env {
   TRAFFIC: AnalyticsEngineDataset;
 }
 
+const THEME_DEFAULT = 'dark';
+
+const THEME_BOOT = `
+  <meta name="color-scheme" content="dark light" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('tt-theme');
+        if (t !== 'light' && t !== 'dark') {
+          if (window.matchMedia('(prefers-color-scheme: light)').matches) t = 'light';
+          else if (window.matchMedia('(prefers-color-scheme: dark)').matches) t = 'dark';
+          else t = '${THEME_DEFAULT}';
+        }
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', '${THEME_DEFAULT}');
+      }
+    })();
+  </script>
+`;
+
+const THEME_CSS = `
+  html { color-scheme: light; }
+  html[data-theme='dark'] { color-scheme: dark; }
+  [data-theme='dark'] {
+    --tt-paper: #152538;
+    --tt-ink: #FBFAF7;
+    --tt-line: #2f4a6b;
+    --tt-muted: #9aabbf;
+    --tt-blue: #E8D9BC;
+    --tt-slate: #9AABBF;
+  }
+  .theme-toggle {
+    appearance: none;
+    margin: 0;
+    padding: 0.4rem 0.7rem;
+    border: 1px solid var(--tt-line);
+    border-radius: var(--tt-radius);
+    background: transparent;
+    color: var(--tt-muted);
+    font-family: var(--tt-font-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .theme-toggle:hover { color: var(--tt-blue); border-color: var(--tt-blue); }
+  .theme-toggle:focus-visible { outline: 2px solid var(--tt-clay); outline-offset: 2px; }
+`;
+
+const THEME_JS = `
+<script>
+(function () {
+  var root = document.documentElement;
+  var storageKey = 'tt-theme';
+  function currentTheme() {
+    return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  }
+  function labelFor(theme) { return theme === 'dark' ? 'Light' : 'Dark'; }
+  function ariaFor(theme) {
+    return theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+  }
+  function apply(theme) {
+    root.setAttribute('data-theme', theme);
+    try { localStorage.setItem(storageKey, theme); } catch (e) {}
+    document.querySelectorAll('[data-theme-toggle]').forEach(function (btn) {
+      btn.setAttribute('aria-label', ariaFor(theme));
+      var label = btn.querySelector('[data-theme-label]');
+      if (label) label.textContent = labelFor(theme);
+    });
+  }
+  document.querySelectorAll('[data-theme-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      apply(currentTheme() === 'dark' ? 'light' : 'dark');
+    });
+  });
+  apply(currentTheme());
+})();
+</script>`;
+
+const THEME_TOGGLE = `<button type="button" class="theme-toggle" data-theme-toggle aria-label="Switch to light theme"><span class="theme-toggle-label" data-theme-label>Light</span></button>`;
+
 const BRAND_HEAD = `
+  ${THEME_BOOT}
   <link rel="stylesheet" href="https://congtam.net/assets/tamta-tokens.css">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="icon" href="https://congtam.net/assets/mark-tile.svg">
 `;
 
 const SHARED_CSS = `
+  ${THEME_CSS}
   * { box-sizing: border-box; }
   body {
     max-width: 800px;
@@ -42,7 +127,7 @@ const SHARED_CSS = `
     font-weight: 600;
     color: var(--tt-blue);
   }
-  nav { display: flex; gap: 1rem; }
+  nav { display: flex; gap: 1rem; align-items: center; }
   nav a {
     color: var(--tt-muted);
     text-decoration: none;
@@ -162,10 +247,11 @@ const NAV = `
 <nav>
   <a href="/about">About</a>
   <a href="/privacy">Privacy</a>
+  ${THEME_TOGGLE}
 </nav>`;
 
 const HTML = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="${THEME_DEFAULT}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -223,6 +309,7 @@ const HTML = `<!DOCTYPE html>
       }
     };
   </script>
+  ${THEME_JS}
 </body>
 </html>`;
 
@@ -372,7 +459,7 @@ function renderViewPage(id: string, text: string, reqUrl: string): string {
   const rawUrl = new URL('/raw/' + id, reqUrl).toString();
   const shareUrl = new URL('/' + id, reqUrl).toString();
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="${THEME_DEFAULT}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -396,13 +483,14 @@ function renderViewPage(id: string, text: string, reqUrl: string): string {
   </div>
   </main>
   ${FOOTER}
+  ${THEME_JS}
 </body>
 </html>`;
 }
 
 function renderAboutPage(): string {
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="${THEME_DEFAULT}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -424,13 +512,14 @@ function renderAboutPage(): string {
   <p><a class="button primary" href="/">Create a note</a></p>
   </main>
   ${FOOTER}
+  ${THEME_JS}
 </body>
 </html>`;
 }
 
 function renderPrivacyPage(): string {
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="${THEME_DEFAULT}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -452,13 +541,14 @@ function renderPrivacyPage(): string {
   <p><a class="button primary" href="/">Home</a></p>
   </main>
   ${FOOTER}
+  ${THEME_JS}
 </body>
 </html>`;
 }
 
 function renderNotFoundPage(): string {
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="${THEME_DEFAULT}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -476,6 +566,7 @@ function renderNotFoundPage(): string {
   <p><a class="button primary" href="/">Create a note</a></p>
   </main>
   ${FOOTER}
+  ${THEME_JS}
 </body>
 </html>`;
 }
