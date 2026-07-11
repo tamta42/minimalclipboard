@@ -3,6 +3,7 @@ export interface Env {
   DEFAULT_TTL_SECONDS: number; // 0 for none
   MAX_BYTES: number; // payload size guard
   WRITE_RATE_LIMITER: RateLimit;
+  TRAFFIC: AnalyticsEngineDataset;
 }
 
 const BRAND_HEAD = `
@@ -229,7 +230,13 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
+    const response = await handleRequest(request, env, path);
+    logTraffic(env, request, path, response.status);
+    return response;
+  },
+} satisfies ExportedHandler<Env>;
 
+async function handleRequest(request: Request, env: Env, path: string): Promise<Response> {
     if (request.method === 'GET' && (path === '/' || path === '/index.html')) {
       return html(HTML);
     }
@@ -244,10 +251,12 @@ export default {
 
     if (request.method === 'POST' && path === '/api/create') {
       try {
-        const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-        const { success } = await env.WRITE_RATE_LIMITER.limit({ key: ip });
-        if (!success) {
-          return json({ error: 'Too many requests. Paste creation is limited to 10 per minute.' }, 429);
+        if (env.WRITE_RATE_LIMITER) {
+          const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+          const { success } = await env.WRITE_RATE_LIMITER.limit({ key: ip });
+          if (!success) {
+            return json({ error: 'Too many requests. Paste creation is limited to 10 per minute.' }, 429);
+          }
         }
 
         const body = await request.json<any>();
@@ -285,7 +294,6 @@ export default {
     }
 
     if (request.method === 'GET' && path !== '/') {
-      // Reserved paths already handled above
       const id = path.replace(/^\//, '');
       if (id === 'about' || id === 'privacy') {
         return html(renderNotFoundPage(), 404);
@@ -296,8 +304,17 @@ export default {
     }
 
     return html(renderNotFoundPage(), 404);
-  },
-} satisfies ExportedHandler<Env>;
+}
+
+function logTraffic(env: Env, request: Request, pathname: string, status: number): void {
+  if (!env.TRAFFIC) return;
+  const country = (request.cf?.country as string | undefined) || 'XX';
+  env.TRAFFIC.writeDataPoint({
+    blobs: [pathname, country, request.method],
+    doubles: [status],
+    indexes: ['clipboard'],
+  });
+}
 
 function html(body: string, status = 200): Response {
   return new Response(body, {

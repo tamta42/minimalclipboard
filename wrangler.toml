@@ -22,3 +22,10 @@ namespace_id = "1001"
 [ratelimits.simple]
 limit = 10
 period = 60
+
+[[analytics_engine_datasets]]
+binding = "TRAFFIC"
+dataset = "clipboard_traffic"
+
+[observability.logs]
+enabled = true
