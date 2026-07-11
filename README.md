@@ -1,41 +1,32 @@
-## Zanile Minimal Clipboard (Cloudflare Worker)
+# Clipboard
 
-A minimalist web text clipboard like justpaste.it. Users can paste text, save, and share via a short URL.
+Paste text, get a shareable URL. Anonymous notes on Cloudflare Workers + KV.
+Part of the [congtam.net](https://congtam.net) portfolio. Live at [zanile.com](https://zanile.com).
 
-### Stack
-- Cloudflare Workers (TypeScript/ES Modules)
-- Cloudflare KV for storage
-- Vanilla HTML/CSS/JS (zero dependencies)
+## Setup
 
-### Local Dev
-1. Install Node.js 18+ and Cloudflare Wrangler (`npm i -g wrangler` or use `npx`).
-2. Install deps: `npm install`
-3. Dev server: `npm run dev`
-4. Type check: `npm run check`
-
-### Deploy
-1. Authenticate: `npx wrangler login`
-2. Create KV namespace (first time only): `npx wrangler kv:namespace create NOTES` and repeat with `--environment preview` if desired.
-3. Update `wrangler.toml` KV namespace IDs as instructed in the command output.
-4. Publish: `npm run deploy`
-
-### Custom Domain
-Publish will default to your `*.workers.dev` subdomain. To use `zanile.com`, add the zone to Cloudflare and set a route in `wrangler.toml` like:
-
-```
-routes = [
-  { pattern = "zanile.com/*", zone_name = "zanile.com" }
-]
+```bash
+npm install
+npm run check   # TypeScript
+npm run dev     # Local: http://127.0.0.1:8787
 ```
 
-Then republish.
+Requires Node 18+ and a Cloudflare account (`npx wrangler login`).
 
-### Notes
-- Max payload enforced server-side to protect KV (default 100KB).
-- Entries are given an 8-char random ID (a-z, 0-9). Collisions are retried with longer IDs.
-- Set TTL via `DEFAULT_TTL_SECONDS` in `wrangler.toml` if you want auto-expiry (0 = no expiry).
-- Custom IDs supported: alphanumeric + hyphens, max 64 chars.
-- Raw text access via `/raw/{id}` endpoint.
-- About page available at `/about`.
+## Deploy
 
-Built because I've always wanted something like justpaste.it with full control.
+```bash
+npx wrangler deploy
+```
+
+`wrangler.toml` already has the production KV namespace, rate limit, and Analytics Engine bindings. After deploy, verify create/read on the live URL. Use `npx wrangler rollback` if production misbehaves.
+
+First-time KV (only if recreating): `npx wrangler kv namespace create NOTES`, then put the IDs into `wrangler.toml` and redeploy.
+
+## Behaviour
+
+- Max 100 KB per paste (`MAX_BYTES`).
+- Default TTL 30 days (`DEFAULT_TTL_SECONDS`).
+- Create endpoint rate-limited to 10/min per IP.
+- Custom IDs: `a–z`, `0–9`, `-`, max 64 chars.
+- Raw text: `/raw/{id}`. Pages: `/`, `/about`, `/privacy`.
