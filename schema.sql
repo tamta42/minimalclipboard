@@ -17,7 +17,9 @@ CREATE TABLE IF NOT EXISTS pastes (
   user_id INTEGER NOT NULL,
   preview TEXT,
   created_at TEXT NOT NULL,
+  expires_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_pastes_user_id ON pastes(user_id);
+CREATE INDEX IF NOT EXISTS idx_pastes_expires_at ON pastes(expires_at);

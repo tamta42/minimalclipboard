@@ -18,10 +18,14 @@ database_id = "4f344ad6-a3a2-48c4-aa12-576c383bfe88"
 # ]
 
 [vars]
-DEFAULT_TTL_SECONDS = 2592000 # 30 days
+DEFAULT_TTL_SECONDS = 604800 # 7 days — no forever option
 MAX_BYTES = 100000
+WRITE_RATE_LIMIT_PER_HOUR = 10
 ENVIRONMENT = "production"
 
+# Native Workers rate limiting only supports period = 10 or 60 seconds.
+# WRITE_RATE_LIMITER is a burst cap (10 / 60s). True ~10 creations/IP/hour
+# is enforced in code via a NOTES KV counter keyed by IP + UTC hour.
 [[ratelimits]]
 name = "WRITE_RATE_LIMITER"
 namespace_id = "1001"
@@ -39,6 +43,9 @@ period = 60
 [[analytics_engine_datasets]]
 binding = "TRAFFIC"
 dataset = "clipboard_traffic"
+
+[triggers]
+crons = ["0 * * * *"] # hourly: delete expired D1 paste metadata (+ KV keys)
 
 [observability.logs]
 enabled = true

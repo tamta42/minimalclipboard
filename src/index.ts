@@ -3,6 +3,7 @@ export interface Env {
   DB: D1Database;
   DEFAULT_TTL_SECONDS: number;
   MAX_BYTES: number;
+  WRITE_RATE_LIMIT_PER_HOUR: number;
   WRITE_RATE_LIMITER: RateLimit;
   AUTH_RATE_LIMITER: RateLimit;
   TRAFFIC: AnalyticsEngineDataset;
@@ -16,6 +17,16 @@ const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
 const AUTH_TTL_SEC = 60 * 60 * 24 * 30;
 const THEME_DEFAULT = 'dark';
+const ABUSE_EMAIL = 'abuse@zanile.com';
+/** Default and maximum paste lifetime: 7 days. No forever option. */
+const TTL_7D = 604800;
+const TTL_OPTIONS: Record<string, number> = {
+  '1h': 3600,
+  '1d': 86400,
+  '7d': TTL_7D,
+};
+/** 16 random bytes → 128 bits of entropy (base64url). */
+const PASTE_ID_BYTES = 16;
 
 const THEME_BOOT = `
   <meta name="color-scheme" content="dark light" />
@@ -329,6 +340,10 @@ const SHARED_CSS = `
     padding-top: 1rem;
     border-top: 1px solid var(--tt-line);
     font-size: 0.8rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
   }
   footer a {
     display: inline-flex;
@@ -339,16 +354,44 @@ const SHARED_CSS = `
   }
   footer a:hover { color: var(--tt-blue); }
   footer img { width: 16px; height: 16px; border-radius: 3px; }
+  footer .footer-sep { color: var(--tt-line); }
+  .ttl-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin-top: 0.75rem;
+    align-items: center;
+  }
+  .ttl-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--tt-muted);
+    cursor: pointer;
+  }
+  .ttl-row input { accent-color: var(--tt-clay); }
 `;
 
-const FOOTER = `
+function abuseMailto(pasteUrl?: string): string {
+  const subject = pasteUrl ? 'Abuse report — zanile paste' : 'Abuse report — zanile.com';
+  const body = pasteUrl
+    ? `I would like to report abuse for this paste:\n\n${pasteUrl}\n\nDetails:\n`
+    : 'I would like to report abuse on zanile.com.\n\nDetails:\n';
+  return `mailto:${ABUSE_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function renderFooter(pasteUrl?: string): string {
+  return `
 <footer>
   <a href="https://congtam.net">
     <img src="https://congtam.net/assets/mark-tile.svg" alt="" width="16" height="16" />
     congtam.net
   </a>
+  <span class="footer-sep" aria-hidden="true">·</span>
+  <a href="${escapeHtml(abuseMailto(pasteUrl))}">Report abuse</a>
 </footer>`;
-
+}
 const BRAND = `
 <a class="brand" href="/">
   <img src="https://congtam.net/assets/mark-tile.svg" alt="" width="28" height="28" />
@@ -615,22 +658,22 @@ const HTML = `<!DOCTYPE html>
           <form id="form">
             <label class="label" for="text">Text</label>
             <textarea id="text" placeholder="Paste or type text…"></textarea>
+            <div class="ttl-row" role="group" aria-label="Expiry">
+              <span class="label" style="margin:0">Expires</span>
+              <label><input type="radio" name="ttl" value="1h" /> 1 hour</label>
+              <label><input type="radio" name="ttl" value="1d" /> 1 day</label>
+              <label><input type="radio" name="ttl" value="7d" checked /> 7 days</label>
+            </div>
             <div class="row">
               <button id="save" class="primary" type="submit">Save</button>
               <button id="clear" class="secondary" type="button">Clear</button>
             </div>
-            <div class="row">
-              <div>
-                <label class="label" for="id">Custom ID</label>
-                <input id="id" type="text" placeholder="Optional (a–z, 0–9, -), default random" />
-              </div>
-            </div>
-            <div class="note">Max 100 KB. Your note gets a shareable URL. Sign in to keep a list of your pastes.</div>
+            <div class="note">Plain text only. Max 100 KB. Expires after 7 days by default (shorter optional). No forever.</div>
             <div id="result" class="link"></div>
             <div id="error" class="err"></div>
           </form>
           </main>
-          ${FOOTER}
+          ${renderFooter()}
         </div>
       </div>
     </div>
@@ -639,15 +682,22 @@ const HTML = `<!DOCTYPE html>
   <script>
     const form = document.getElementById('form');
     const text = document.getElementById('text');
-    const idInput = document.getElementById('id');
     const result = document.getElementById('result');
     const error = document.getElementById('error');
     const clearBtn = document.getElementById('clear');
-    clearBtn.onclick = () => { text.value=''; idInput.value=''; result.textContent=''; error.textContent=''; };
+    clearBtn.onclick = () => {
+      text.value = '';
+      result.textContent = '';
+      error.textContent = '';
+      const def = form.querySelector('input[name="ttl"][value="7d"]');
+      if (def) def.checked = true;
+    };
     form.onsubmit = async (e) => {
       e.preventDefault();
-      result.textContent=''; error.textContent='';
-      const payload = { text: text.value, id: idInput.value || undefined };
+      result.textContent = '';
+      error.textContent = '';
+      const ttlEl = form.querySelector('input[name="ttl"]:checked');
+      const payload = { text: text.value, ttl: ttlEl ? ttlEl.value : '7d' };
       try {
         const res = await fetch('/api/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await res.json();
@@ -674,9 +724,28 @@ export default {
     logTraffic(env, request, path, response.status);
     return response;
   },
+
+  async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    await cleanupExpiredPastes(env);
+  },
 } satisfies ExportedHandler<Env>;
 
 async function handleRequest(request: Request, env: Env, path: string): Promise<Response> {
+  if (request.method === 'GET' && path === '/robots.txt') {
+    return new Response(
+      [
+        'User-agent: *',
+        'Allow: /$',
+        'Allow: /about',
+        'Allow: /privacy',
+        'Disallow: /',
+        'Disallow: /raw/',
+        '',
+      ].join('\n'),
+      { headers: { 'content-type': 'text/plain; charset=UTF-8' } },
+    );
+  }
+
   if (request.method === 'GET' && (path === '/' || path === '/index.html')) {
     return html(HTML);
   }
@@ -710,48 +779,53 @@ async function handleRequest(request: Request, env: Env, path: string): Promise<
 
   if (request.method === 'POST' && path === '/api/create') {
     try {
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const hourLimit = Number(env.WRITE_RATE_LIMIT_PER_HOUR) || 10;
+
+      // Burst: native Workers rate limit (period must be 10 or 60s).
       if (env.WRITE_RATE_LIMITER) {
-        const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
         const { success } = await env.WRITE_RATE_LIMITER.limit({ key: ip });
         if (!success) {
-          return json({ error: 'Too many requests. Paste creation is limited to 10 per minute.' }, 429);
+          return json({ error: `Too many requests. Paste creation is limited to ${hourLimit} per hour.` }, 429);
         }
+      }
+
+      // Hourly: NOTES KV counter (native binding cannot do a 1-hour period).
+      const hourlyOk = await checkHourlyWriteLimit(env, ip, hourLimit);
+      if (!hourlyOk) {
+        return json({ error: `Too many requests. Paste creation is limited to ${hourLimit} per hour.` }, 429);
       }
 
       const body = await request.json<any>();
       const text: string = typeof body?.text === 'string' ? body.text : '';
-      let id: string | undefined = typeof body?.id === 'string' ? body.id : undefined;
       if (!text) return json({ error: 'Text is required' }, 400);
-      const maxBytes = env.MAX_BYTES ?? 100000;
+      // Plain text only — reject non-string payloads already handled; no file uploads.
+      const maxBytes = Number(env.MAX_BYTES) || 100000;
       const size = new TextEncoder().encode(text).byteLength;
-      if (size > maxBytes) return json({ error: `Too large. Limit ${maxBytes} bytes` }, 413);
-
-      if (id) {
-        id = normalizeId(id);
-        if (!/^[a-z0-9-]{1,64}$/.test(id)) return json({ error: 'Invalid id' }, 400);
-        const exists = await env.NOTES.get(id);
-        if (exists) return json({ error: 'ID already exists' }, 409);
-      } else {
-        id = await generateUniqueId(env.NOTES);
+      if (size > maxBytes) {
+        return json({ error: `Paste too large. Maximum size is ${maxBytes} bytes (100 KB).` }, 413);
       }
 
-      const ttlSeconds = env.DEFAULT_TTL_SECONDS && env.DEFAULT_TTL_SECONDS > 0 ? env.DEFAULT_TTL_SECONDS : undefined;
-      await env.NOTES.put(id, text, ttlSeconds ? { expirationTtl: ttlSeconds } : undefined);
+      const ttlSeconds = resolveTtlSeconds(body?.ttl, env);
+      const id = await generateUniqueId(env.NOTES);
+      const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+
+      await env.NOTES.put(id, text, { expirationTtl: Math.max(ttlSeconds, 60) });
 
       const user = await getAuthUser(request, env);
       if (user) {
         const userId = await ensureUser(env, user.email);
         const preview = text.replace(/\s+/g, ' ').trim().slice(0, 80);
         await env.DB.prepare(
-          `INSERT INTO pastes (id, user_id, preview, created_at) VALUES (?, ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id, preview=excluded.preview, created_at=excluded.created_at`,
+          `INSERT INTO pastes (id, user_id, preview, created_at, expires_at) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET user_id=excluded.user_id, preview=excluded.preview, created_at=excluded.created_at, expires_at=excluded.expires_at`,
         )
-          .bind(id, userId, preview, new Date().toISOString())
+          .bind(id, userId, preview, new Date().toISOString(), expiresAt)
           .run();
       }
 
       const shareUrl = new URL('/' + id, request.url).toString();
-      return json({ id, url: shareUrl }, 201);
+      return json({ id, url: shareUrl, expiresAt, ttlSeconds }, 201);
     } catch {
       return json({ error: 'Bad Request' }, 400);
     }
@@ -759,19 +833,33 @@ async function handleRequest(request: Request, env: Env, path: string): Promise<
 
   if (request.method === 'GET' && path.startsWith('/raw/')) {
     const id = path.slice('/raw/'.length);
+    if (!isPasteId(id)) return plainNotFound();
     const value = await env.NOTES.get(id);
-    if (value == null) return html(renderNotFoundPage(), 404);
-    return new Response(value, { headers: { 'content-type': 'text/plain; charset=UTF-8' } });
+    if (value == null) return plainNotFound();
+    return new Response(value, {
+      headers: {
+        'content-type': 'text/plain; charset=UTF-8',
+        'X-Robots-Tag': 'noindex',
+        'Cache-Control': 'no-store',
+      },
+    });
   }
 
   if (request.method === 'GET' && path !== '/') {
     const id = path.slice(1);
-    if (id === 'about' || id === 'privacy' || id === 'auth' || id.startsWith('api')) {
+    if (
+      id === 'about' ||
+      id === 'privacy' ||
+      id === 'auth' ||
+      id === 'robots.txt' ||
+      id.startsWith('api')
+    ) {
       return html(renderNotFoundPage(), 404);
     }
+    if (!isPasteId(id)) return html(renderNotFoundPage(), 404);
     const value = await env.NOTES.get(id);
     if (value == null) return html(renderNotFoundPage(), 404);
-    return html(renderViewPage(id, value, request.url));
+    return html(renderViewPage(id, value, request.url), 200, { 'X-Robots-Tag': 'noindex' });
   }
 
   return html(renderNotFoundPage(), 404);
@@ -1017,10 +1105,10 @@ function logTraffic(env: Env, request: Request, pathname: string, status: number
   });
 }
 
-function html(body: string, status = 200): Response {
+function html(body: string, status = 200, extraHeaders?: Record<string, string>): Response {
   return new Response(body, {
     status,
-    headers: { 'content-type': 'text/html; charset=UTF-8' },
+    headers: { 'content-type': 'text/html; charset=UTF-8', ...extraHeaders },
   });
 }
 
@@ -1031,32 +1119,64 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
-async function generateUniqueId(kv: KVNamespace): Promise<string> {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const id = randomId(8);
-    const exists = await kv.get(id);
-    if (!exists) return id;
+function plainNotFound(): Response {
+  return new Response('Not found', {
+    status: 404,
+    headers: { 'content-type': 'text/plain; charset=UTF-8', 'X-Robots-Tag': 'noindex' },
+  });
+}
+
+function resolveTtlSeconds(raw: unknown, env: Env): number {
+  const fallback = Number(env.DEFAULT_TTL_SECONDS) > 0 ? Number(env.DEFAULT_TTL_SECONDS) : TTL_7D;
+  const key = typeof raw === 'string' ? raw : '';
+  const chosen = TTL_OPTIONS[key];
+  if (chosen && chosen > 0 && chosen <= TTL_7D) return chosen;
+  return Math.min(fallback, TTL_7D);
+}
+
+async function checkHourlyWriteLimit(env: Env, ip: string, limit: number): Promise<boolean> {
+  const hour = new Date().toISOString().slice(0, 13); // YYYY-MM-DDTHH UTC
+  const key = `rl:write:${ip}:${hour}`;
+  const current = Number.parseInt((await env.NOTES.get(key)) || '0', 10) || 0;
+  if (current >= limit) return false;
+  await env.NOTES.put(key, String(current + 1), { expirationTtl: 3600 });
+  return true;
+}
+
+async function cleanupExpiredPastes(env: Env): Promise<void> {
+  const now = new Date().toISOString();
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT id FROM pastes WHERE expires_at IS NOT NULL AND expires_at < ? LIMIT 500`,
+    )
+      .bind(now)
+      .all<{ id: string }>();
+    for (const row of results || []) {
+      await env.NOTES.delete(row.id);
+      await env.DB.prepare(`DELETE FROM pastes WHERE id = ?`).bind(row.id).run();
+    }
+  } catch (err) {
+    console.error('cleanupExpiredPastes', err);
   }
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const id = randomId(12);
+}
+
+/** Accept new unguessable IDs and legacy short alphanumeric IDs. */
+function isPasteId(id: string): boolean {
+  return /^[A-Za-z0-9_-]{8,64}$/.test(id);
+}
+
+async function generateUniqueId(kv: KVNamespace): Promise<string> {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const id = randomPasteId();
     const exists = await kv.get(id);
     if (!exists) return id;
   }
   throw new Error('Could not generate unique id');
 }
 
-function randomId(length: number): string {
-  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let out = '';
-  const rand = crypto.getRandomValues(new Uint8Array(length));
-  for (let i = 0; i < length; i++) {
-    out += alphabet[rand[i] % alphabet.length];
-  }
-  return out;
-}
-
-function normalizeId(id: string): string {
-  return id.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+function randomPasteId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(PASTE_ID_BYTES));
+  return bytesToBase64Url(bytes);
 }
 
 function escapeHtml(s: string): string {
@@ -1077,10 +1197,11 @@ function renderViewPage(id: string, text: string, reqUrl: string): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
   <title>${escapeHtml(id)} — zanile.com</title>
   ${BRAND_HEAD}
   <style>${SHARED_CSS}</style>
-  <meta name="description" content="Shared note ${escapeHtml(id)}" />
+  <meta name="description" content="Shared note" />
 </head>
 <body>
   <div class="app-shell">
@@ -1102,7 +1223,7 @@ function renderViewPage(id: string, text: string, reqUrl: string): string {
             <a class="button secondary" href="${escapeHtml(rawUrl)}">Raw</a>
           </div>
           </main>
-          ${FOOTER}
+          ${renderFooter(shareUrl)}
         </div>
       </div>
     </div>
@@ -1140,10 +1261,10 @@ function renderAboutPage(): string {
           <h1>About</h1>
           <p>zanile.com is a minimal paste-and-share tool. Paste text, get a URL, send the link.</p>
           <p>It is part of the <a href="https://congtam.net">congtam.net</a> portfolio. Optional email sign-in keeps a list of your pastes. No tracking pixels or ads.</p>
-          <p>Notes live in Cloudflare KV and expire after 30 days by default. See <a href="/privacy">Privacy</a> for retention detail.</p>
+          <p>Notes live in Cloudflare KV and expire after 7 days by default (1 hour or 1 day optional). See <a href="/privacy">Privacy</a> for retention detail.</p>
           <p><a class="button primary" href="/">Create a note</a></p>
           </main>
-          ${FOOTER}
+          ${renderFooter()}
         </div>
       </div>
     </div>
@@ -1180,11 +1301,12 @@ function renderPrivacyPage(): string {
           <main>
           <h1>Privacy</h1>
           <p>No third-party trackers or ads. The app runs entirely on Cloudflare.</p>
-          <p>Pastes are stored in Cloudflare KV for 30 days by default, then auto-deleted. If you sign in, ownership metadata is stored in D1 so you can list your pastes.</p>
-          <p>Sign-in uses a one-time email code. Session cookies are HttpOnly. Paste content is never written to analytics.</p>
+          <p>Pastes are stored as plain text in Cloudflare KV and expire after 7 days by default (or sooner if you choose 1 hour / 1 day). There is no forever option. Expired pastes are deleted by KV TTL and a scheduled cleanup job.</p>
+          <p>If you sign in, ownership metadata is stored in D1 so you can list your pastes. Sign-in uses a one-time email code. Session cookies are HttpOnly. Paste content is never written to analytics.</p>
+          <p>To report abusive content, use the Report abuse link in the footer.</p>
           <p><a class="button primary" href="/">Home</a></p>
           </main>
-          ${FOOTER}
+          ${renderFooter()}
         </div>
       </div>
     </div>
@@ -1202,6 +1324,7 @@ function renderNotFoundPage(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
   <title>Not found — zanile.com</title>
   ${BRAND_HEAD}
   <style>${SHARED_CSS}</style>
@@ -1221,7 +1344,7 @@ function renderNotFoundPage(): string {
           <p>No note exists at this URL. It may have expired or never been created.</p>
           <p><a class="button primary" href="/">Create a note</a></p>
           </main>
-          ${FOOTER}
+          ${renderFooter()}
         </div>
       </div>
     </div>
