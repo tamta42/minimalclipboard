@@ -106,11 +106,80 @@ const BRAND_HEAD = `
 `;
 
 const AUTH_CSS = `
-  .header-cluster { display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap; justify-content: flex-end; }
-  .auth-box {
-    min-width: 180px; max-width: 220px; padding-left: 0.85rem;
-    border-left: 1px solid var(--tt-line); display: flex; flex-direction: column; gap: 0.35rem;
+  .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
+  .top-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--tt-line); flex-shrink: 0;
   }
+  .brand {
+    display: inline-flex; align-items: center; gap: 0.55rem;
+    text-decoration: none; color: var(--tt-blue); min-width: 0;
+  }
+  .brand img { width: 28px; height: 28px; border-radius: var(--tt-radius); flex-shrink: 0; }
+  .brand-text { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
+  .brand-name { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+  .brand-tag { font-size: 0.72rem; font-weight: 500; color: var(--tt-muted); letter-spacing: 0.01em; }
+  .top-bar-actions { display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap; justify-content: flex-end; }
+  .top-bar-actions a { font-size: 0.85rem; color: var(--tt-muted); text-decoration: none; }
+  .top-bar-actions a:hover { color: var(--tt-blue); }
+  .header-account-btn { display: none; }
+  .app-body { flex: 1; display: flex; min-height: 0; min-width: 0; position: relative; }
+  .account-sidebar {
+    --sidebar-w: 260px;
+    width: var(--sidebar-w); flex-shrink: 0; display: flex; position: relative;
+    border-right: 1px solid var(--tt-line); background: var(--tt-paper); z-index: 30;
+    transition: width 0.18s ease;
+  }
+  .account-sidebar.is-collapsed { width: 40px; }
+  .sidebar-rail {
+    display: none; width: 40px; flex-shrink: 0; flex-direction: column; align-items: center;
+    padding: 0.75rem 0; gap: 0.5rem;
+  }
+  .account-sidebar.is-collapsed .sidebar-rail { display: flex; }
+  .account-sidebar.is-collapsed .sidebar-panel { display: none; }
+  .account-sidebar.is-collapsed .sidebar-resizer { display: none; }
+  .rail-btn {
+    appearance: none; width: 28px; height: 28px; padding: 0; border: none; background: transparent;
+    color: var(--tt-muted); cursor: pointer; border-radius: var(--tt-radius);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .rail-btn:hover { color: var(--tt-blue); background: color-mix(in srgb, var(--tt-blue) 10%, transparent); }
+  .rail-btn:focus-visible { outline: 2px solid var(--tt-clay); outline-offset: 2px; }
+  .rail-btn svg { width: 16px; height: 16px; display: block; }
+  .sidebar-panel {
+    flex: 1; min-width: 0; padding: 0.85rem 0.9rem 1rem; display: flex; flex-direction: column;
+    gap: 0.85rem; overflow: auto;
+  }
+  .sidebar-panel-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  }
+  .sidebar-panel-head .label { margin: 0; }
+  .sidebar-collapse {
+    appearance: none; width: 22px; height: 22px; padding: 0; border: 1px solid transparent;
+    background: transparent; color: var(--tt-muted); cursor: pointer; border-radius: 4px;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; line-height: 1;
+  }
+  .sidebar-collapse:hover { color: var(--tt-blue); border-color: var(--tt-line); }
+  .sidebar-resizer {
+    position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 2;
+  }
+  .sidebar-resizer::after {
+    content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 1px;
+    background: transparent; transition: background 0.15s ease;
+  }
+  .sidebar-resizer:hover::after, .account-sidebar.is-resizing .sidebar-resizer::after {
+    background: var(--tt-blue); opacity: 0.55;
+  }
+  .sidebar-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(20, 30, 40, 0.35); z-index: 25;
+  }
+  .sidebar-overlay.show { display: block; }
+  .main-area { flex: 1; min-width: 0; overflow: auto; display: flex; flex-direction: column; }
+  .page-inner {
+    max-width: 800px; width: 100%; margin: 0 auto;
+    padding: 1.5rem 1.25rem 2.5rem; flex: 1; display: flex; flex-direction: column;
+  }
+  .auth-box { display: flex; flex-direction: column; gap: 0.35rem; }
   .auth-box .label {
     font-family: var(--tt-font-mono); font-size: 0.65rem; font-weight: 500;
     text-transform: uppercase; letter-spacing: 0.1em; color: var(--tt-muted); margin: 0;
@@ -128,16 +197,28 @@ const AUTH_CSS = `
   .auth-box .btn.secondary { background: transparent; color: var(--tt-blue); border-color: var(--tt-line); }
   .auth-box .err { color: var(--tt-clay); font-size: 0.75rem; margin: 0; min-height: 0; }
   .auth-box .signed-email { font-size: 0.8rem; margin: 0; word-break: break-all; color: var(--tt-ink); }
-  .saved-panel { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--tt-line); display: none; }
+  .saved-panel { display: none; padding-top: 0.75rem; border-top: 1px solid var(--tt-line); }
   .saved-panel.visible { display: block; }
   .saved-panel h2 {
-    margin: 0 0 0.75rem; font-size: 0.9rem; font-family: var(--tt-font-mono);
+    margin: 0 0 0.75rem; font-size: 0.75rem; font-family: var(--tt-font-mono);
     text-transform: uppercase; letter-spacing: 0.08em; color: var(--tt-muted); font-weight: 500;
   }
   .saved-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
-  .saved-list a { color: var(--tt-blue); text-decoration: none; font-size: 0.9rem; }
+  .saved-list a { color: var(--tt-blue); text-decoration: none; font-size: 0.85rem; }
   .saved-list a:hover { color: var(--tt-clay); }
-  .saved-empty { color: var(--tt-muted); font-size: 0.85rem; margin: 0; }
+  .saved-empty { color: var(--tt-muted); font-size: 0.8rem; margin: 0; }
+  @media (max-width: 800px) {
+    .header-account-btn { display: inline-flex; }
+    .account-sidebar {
+      position: fixed; top: 0; left: 0; height: 100vh; width: min(var(--sidebar-w), 86vw);
+      transform: translateX(-105%); transition: transform 0.2s ease; border-right: 1px solid var(--tt-line);
+    }
+    .account-sidebar.is-open { transform: translateX(0); }
+    .account-sidebar.is-collapsed { width: min(var(--sidebar-w), 86vw); }
+    .account-sidebar.is-collapsed .sidebar-rail { display: none; }
+    .account-sidebar.is-collapsed .sidebar-panel { display: flex; }
+    .sidebar-resizer { display: none; }
+  }
 `;
 
 const SHARED_CSS = `
@@ -145,49 +226,20 @@ const SHARED_CSS = `
   ${AUTH_CSS}
   * { box-sizing: border-box; }
   body {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 2rem 1rem 4rem;
+    margin: 0;
     font-family: var(--tt-font-display);
     background: var(--tt-paper);
     color: var(--tt-ink);
     line-height: 1.5;
     min-height: 100vh;
-    display: flex;
-    flex-direction: column;
   }
   main { flex: 1; }
-  header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--tt-line);
-  }
-  .brand {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.55rem;
-    color: var(--tt-blue);
-    text-decoration: none;
-    min-width: 0;
-  }
-  .brand img { width: 28px; height: 28px; border-radius: var(--tt-radius); flex-shrink: 0; }
   h1 {
-    margin: 0;
+    margin: 0 0 1rem;
     font-size: 1.25rem;
     font-weight: 600;
     color: var(--tt-blue);
   }
-  nav { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
-  nav a {
-    color: var(--tt-muted);
-    text-decoration: none;
-    font-size: 0.9rem;
-  }
-  nav a:hover { color: var(--tt-blue); }
   label.label {
     display: block;
     font-family: var(--tt-font-mono);
@@ -287,10 +339,6 @@ const SHARED_CSS = `
   }
   footer a:hover { color: var(--tt-blue); }
   footer img { width: 16px; height: 16px; border-radius: 3px; }
-  @media (max-width: 640px) {
-    .auth-box { border-left: none; padding-left: 0; max-width: none; width: 100%; }
-    .header-cluster { width: 100%; }
-  }
 `;
 
 const FOOTER = `
@@ -301,9 +349,30 @@ const FOOTER = `
   </a>
 </footer>`;
 
+const BRAND = `
+<a class="brand" href="/">
+  <img src="https://congtam.net/assets/mark-tile.svg" alt="" width="28" height="28" />
+  <span class="brand-text">
+    <span class="brand-name">zanile.com</span>
+    <span class="brand-tag">Web clipboard</span>
+  </span>
+</a>`;
+
+const HEADER_ACTIONS = `
+<div class="top-bar-actions">
+  <button type="button" class="rail-btn header-account-btn" id="headerAccountBtn" aria-label="Open account sidebar" title="Account">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+      <circle cx="8" cy="5.5" r="2.5"/>
+      <path d="M3 13.5c0-2.5 2.2-4 5-4s5 1.5 5 4"/>
+    </svg>
+  </button>
+  <a href="/about">About</a>
+  <a href="/privacy">Privacy</a>
+  ${THEME_TOGGLE}
+</div>`;
+
 const AUTH_BOX = `
 <div class="auth-box" id="authBox">
-  <p class="label">Account</p>
   <div id="authSignedOut">
     <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="email" />
     <button type="button" class="btn" id="requestCode">Send code</button>
@@ -319,15 +388,129 @@ const AUTH_BOX = `
   </div>
 </div>`;
 
-const NAV = `
-<div class="header-cluster">
-  <nav>
-    <a href="/about">About</a>
-    <a href="/privacy">Privacy</a>
-    ${THEME_TOGGLE}
-  </nav>
-  ${AUTH_BOX}
-</div>`;
+const ACCOUNT_SIDEBAR = `
+<aside class="account-sidebar" id="accountSidebar" aria-label="Account">
+  <div class="sidebar-rail">
+    <button type="button" class="rail-btn" id="sidebarExpand" aria-label="Open account sidebar" title="Account">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <circle cx="8" cy="5.5" r="2.5"/>
+        <path d="M3 13.5c0-2.5 2.2-4 5-4s5 1.5 5 4"/>
+      </svg>
+    </button>
+  </div>
+  <div class="sidebar-panel">
+    <div class="sidebar-panel-head">
+      <p class="label">Account</p>
+      <button type="button" class="sidebar-collapse" id="sidebarCollapse" aria-label="Collapse sidebar" title="Collapse">‹</button>
+    </div>
+    ${AUTH_BOX}
+    <div class="saved-panel" id="savedPanel">
+      <h2>Your saved pastes</h2>
+      <div id="savedList"></div>
+    </div>
+  </div>
+  <div class="sidebar-resizer" id="sidebarResizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar"></div>
+</aside>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>`;
+
+const SIDEBAR_JS = `
+<script>
+(function () {
+  var sidebar = document.getElementById('accountSidebar');
+  var overlay = document.getElementById('sidebarOverlay');
+  if (!sidebar) return;
+  var KEY_C = 'tt-sidebar-collapsed';
+  var KEY_W = 'tt-sidebar-width';
+  var COLLAPSE_AT = 72;
+  var MIN_W = 200;
+  var MAX_W = 360;
+  var DEFAULT_W = 260;
+  var mobileMq = window.matchMedia('(max-width: 800px)');
+
+  function isMobile() { return mobileMq.matches; }
+
+  function savedWidth() {
+    try {
+      var w = parseInt(localStorage.getItem(KEY_W) || '', 10);
+      if (w >= MIN_W && w <= MAX_W) return w;
+    } catch (e) {}
+    return DEFAULT_W;
+  }
+
+  function savedCollapsed() {
+    try { return localStorage.getItem(KEY_C) === '1'; } catch (e) { return false; }
+  }
+
+  function setWidth(px) {
+    sidebar.style.setProperty('--sidebar-w', px + 'px');
+    try { localStorage.setItem(KEY_W, String(px)); } catch (e) {}
+  }
+
+  function setCollapsed(collapsed) {
+    sidebar.classList.toggle('is-collapsed', collapsed && !isMobile());
+    try { localStorage.setItem(KEY_C, collapsed ? '1' : '0'); } catch (e) {}
+    if (isMobile()) {
+      sidebar.classList.toggle('is-open', !collapsed);
+      if (overlay) overlay.classList.toggle('show', !collapsed);
+    } else {
+      sidebar.classList.remove('is-open');
+      if (overlay) overlay.classList.remove('show');
+    }
+  }
+
+  function expand() { setCollapsed(false); }
+  function collapse() { setCollapsed(true); }
+
+  function init() {
+    setWidth(savedWidth());
+    if (isMobile()) setCollapsed(true);
+    else setCollapsed(savedCollapsed());
+  }
+
+  var expandBtn = document.getElementById('sidebarExpand');
+  var collapseBtn = document.getElementById('sidebarCollapse');
+  var headerBtn = document.getElementById('headerAccountBtn');
+  if (expandBtn) expandBtn.addEventListener('click', expand);
+  if (collapseBtn) collapseBtn.addEventListener('click', collapse);
+  if (headerBtn) headerBtn.addEventListener('click', expand);
+  if (overlay) overlay.addEventListener('click', collapse);
+
+  var resizer = document.getElementById('sidebarResizer');
+  if (resizer) {
+    var dragging = false;
+    resizer.addEventListener('pointerdown', function (e) {
+      if (isMobile() || sidebar.classList.contains('is-collapsed')) return;
+      dragging = true;
+      sidebar.classList.add('is-resizing');
+      resizer.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    resizer.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      var rect = sidebar.getBoundingClientRect();
+      var w = Math.round(e.clientX - rect.left);
+      if (w < COLLAPSE_AT) {
+        collapse();
+        dragging = false;
+        sidebar.classList.remove('is-resizing');
+        return;
+      }
+      w = Math.max(MIN_W, Math.min(MAX_W, w));
+      setWidth(w);
+      setCollapsed(false);
+    });
+    function endDrag() {
+      dragging = false;
+      sidebar.classList.remove('is-resizing');
+    }
+    resizer.addEventListener('pointerup', endDrag);
+    resizer.addEventListener('pointercancel', endDrag);
+  }
+
+  mobileMq.addEventListener('change', init);
+  init();
+})();
+</script>`;
 
 const AUTH_CLIENT_JS = `
 <script>
@@ -413,40 +596,46 @@ const HTML = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Clipboard</title>
+  <title>zanile.com — Web clipboard</title>
   ${BRAND_HEAD}
   <style>${SHARED_CSS}</style>
   <meta name="description" content="Minimal web text clipboard." />
 </head>
 <body>
-  <header>
-    <a class="brand" href="/"><img src="https://congtam.net/assets/mark-tile.svg" alt="" width="28" height="28" /><h1>Clipboard</h1></a>
-    ${NAV}
-  </header>
-  <main>
-  <form id="form">
-    <label class="label" for="text">Text</label>
-    <textarea id="text" placeholder="Paste or type text…"></textarea>
-    <div class="row">
-      <button id="save" class="primary" type="submit">Save</button>
-      <button id="clear" class="secondary" type="button">Clear</button>
-    </div>
-    <div class="row">
-      <div>
-        <label class="label" for="id">Custom ID</label>
-        <input id="id" type="text" placeholder="Optional (a–z, 0–9, -), default random" />
+  <div class="app-shell">
+    <header class="top-bar">
+      ${BRAND}
+      ${HEADER_ACTIONS}
+    </header>
+    <div class="app-body">
+      ${ACCOUNT_SIDEBAR}
+      <div class="main-area">
+        <div class="page-inner">
+          <main>
+          <form id="form">
+            <label class="label" for="text">Text</label>
+            <textarea id="text" placeholder="Paste or type text…"></textarea>
+            <div class="row">
+              <button id="save" class="primary" type="submit">Save</button>
+              <button id="clear" class="secondary" type="button">Clear</button>
+            </div>
+            <div class="row">
+              <div>
+                <label class="label" for="id">Custom ID</label>
+                <input id="id" type="text" placeholder="Optional (a–z, 0–9, -), default random" />
+              </div>
+            </div>
+            <div class="note">Max 100 KB. Your note gets a shareable URL. Sign in to keep a list of your pastes.</div>
+            <div id="result" class="link"></div>
+            <div id="error" class="err"></div>
+          </form>
+          </main>
+          ${FOOTER}
+        </div>
       </div>
     </div>
-    <div class="note">Max 100 KB. Your note gets a shareable URL. Sign in to keep a list of your pastes.</div>
-    <div id="result" class="link"></div>
-    <div id="error" class="err"></div>
-  </form>
-  <div class="saved-panel" id="savedPanel">
-    <h2>Your saved pastes</h2>
-    <div id="savedList"></div>
   </div>
-  </main>
-  ${FOOTER}
+  ${SIDEBAR_JS}
   <script>
     const form = document.getElementById('form');
     const text = document.getElementById('text');
@@ -888,26 +1077,37 @@ function renderViewPage(id: string, text: string, reqUrl: string): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(id)} — Clipboard</title>
+  <title>${escapeHtml(id)} — zanile.com</title>
   ${BRAND_HEAD}
   <style>${SHARED_CSS}</style>
   <meta name="description" content="Shared note ${escapeHtml(id)}" />
 </head>
 <body>
-  <header>
-    <a class="brand" href="/"><img src="https://congtam.net/assets/mark-tile.svg" alt="" width="28" height="28" /><h1>Note <span style="font-family:var(--tt-font-mono);font-weight:400;font-size:0.9em">${escapeHtml(id)}</span></h1></a>
-    ${NAV}
-  </header>
-  <main>
-  <pre>${escaped}</pre>
-  <div class="row">
-    <input id="share" value="${escapeHtml(shareUrl)}" readonly />
-    <button class="primary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('share').value)">Copy URL</button>
-    <a class="button secondary" href="/">New</a>
-    <a class="button secondary" href="${escapeHtml(rawUrl)}">Raw</a>
+  <div class="app-shell">
+    <header class="top-bar">
+      ${BRAND}
+      ${HEADER_ACTIONS}
+    </header>
+    <div class="app-body">
+      ${ACCOUNT_SIDEBAR}
+      <div class="main-area">
+        <div class="page-inner">
+          <main>
+          <h1 style="font-size:1rem;margin-bottom:1rem">Note <span style="font-family:var(--tt-font-mono);font-weight:400;font-size:0.9em">${escapeHtml(id)}</span></h1>
+          <pre>${escaped}</pre>
+          <div class="row">
+            <input id="share" value="${escapeHtml(shareUrl)}" readonly />
+            <button class="primary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('share').value)">Copy URL</button>
+            <a class="button secondary" href="/">New</a>
+            <a class="button secondary" href="${escapeHtml(rawUrl)}">Raw</a>
+          </div>
+          </main>
+          ${FOOTER}
+        </div>
+      </div>
+    </div>
   </div>
-  </main>
-  ${FOOTER}
+  ${SIDEBAR_JS}
   ${AUTH_CLIENT_JS}
   ${THEME_JS}
 </body>
@@ -920,24 +1120,35 @@ function renderAboutPage(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>About — Clipboard</title>
+  <title>About — zanile.com</title>
   ${BRAND_HEAD}
   <style>${SHARED_CSS}</style>
   <meta name="description" content="About Clipboard, a minimal paste-and-share tool." />
   <link rel="canonical" href="/about" />
 </head>
 <body>
-  <header>
-    <a class="brand" href="/"><img src="https://congtam.net/assets/mark-tile.svg" alt="" width="28" height="28" /><h1>About</h1></a>
-    ${NAV}
-  </header>
-  <main>
-  <p>Clipboard is a minimal paste-and-share tool. Paste text, get a URL, send the link.</p>
-  <p>It is part of the <a href="https://congtam.net">congtam.net</a> portfolio. Optional email sign-in keeps a list of your pastes. No tracking pixels or ads.</p>
-  <p>Notes live in Cloudflare KV and expire after 30 days by default. See <a href="/privacy">Privacy</a> for retention detail.</p>
-  <p><a class="button primary" href="/">Create a note</a></p>
-  </main>
-  ${FOOTER}
+  <div class="app-shell">
+    <header class="top-bar">
+      ${BRAND}
+      ${HEADER_ACTIONS}
+    </header>
+    <div class="app-body">
+      ${ACCOUNT_SIDEBAR}
+      <div class="main-area">
+        <div class="page-inner">
+          <main>
+          <h1>About</h1>
+          <p>zanile.com is a minimal paste-and-share tool. Paste text, get a URL, send the link.</p>
+          <p>It is part of the <a href="https://congtam.net">congtam.net</a> portfolio. Optional email sign-in keeps a list of your pastes. No tracking pixels or ads.</p>
+          <p>Notes live in Cloudflare KV and expire after 30 days by default. See <a href="/privacy">Privacy</a> for retention detail.</p>
+          <p><a class="button primary" href="/">Create a note</a></p>
+          </main>
+          ${FOOTER}
+        </div>
+      </div>
+    </div>
+  </div>
+  ${SIDEBAR_JS}
   ${AUTH_CLIENT_JS}
   ${THEME_JS}
 </body>
@@ -950,24 +1161,35 @@ function renderPrivacyPage(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Privacy — Clipboard</title>
+  <title>Privacy — zanile.com</title>
   ${BRAND_HEAD}
   <style>${SHARED_CSS}</style>
   <meta name="description" content="Privacy policy for Clipboard." />
   <link rel="canonical" href="/privacy" />
 </head>
 <body>
-  <header>
-    <a class="brand" href="/"><img src="https://congtam.net/assets/mark-tile.svg" alt="" width="28" height="28" /><h1>Privacy</h1></a>
-    ${NAV}
-  </header>
-  <main>
-  <p>No third-party trackers or ads. The app runs entirely on Cloudflare.</p>
-  <p>Pastes are stored in Cloudflare KV for 30 days by default, then auto-deleted. If you sign in, ownership metadata is stored in D1 so you can list your pastes.</p>
-  <p>Sign-in uses a one-time email code. Session cookies are HttpOnly. Paste content is never written to analytics.</p>
-  <p><a class="button primary" href="/">Home</a></p>
-  </main>
-  ${FOOTER}
+  <div class="app-shell">
+    <header class="top-bar">
+      ${BRAND}
+      ${HEADER_ACTIONS}
+    </header>
+    <div class="app-body">
+      ${ACCOUNT_SIDEBAR}
+      <div class="main-area">
+        <div class="page-inner">
+          <main>
+          <h1>Privacy</h1>
+          <p>No third-party trackers or ads. The app runs entirely on Cloudflare.</p>
+          <p>Pastes are stored in Cloudflare KV for 30 days by default, then auto-deleted. If you sign in, ownership metadata is stored in D1 so you can list your pastes.</p>
+          <p>Sign-in uses a one-time email code. Session cookies are HttpOnly. Paste content is never written to analytics.</p>
+          <p><a class="button primary" href="/">Home</a></p>
+          </main>
+          ${FOOTER}
+        </div>
+      </div>
+    </div>
+  </div>
+  ${SIDEBAR_JS}
   ${AUTH_CLIENT_JS}
   ${THEME_JS}
 </body>
@@ -980,20 +1202,31 @@ function renderNotFoundPage(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Not found — Clipboard</title>
+  <title>Not found — zanile.com</title>
   ${BRAND_HEAD}
   <style>${SHARED_CSS}</style>
 </head>
 <body>
-  <header>
-    <a class="brand" href="/"><img src="https://congtam.net/assets/mark-tile.svg" alt="" width="28" height="28" /><h1>Not found</h1></a>
-    ${NAV}
-  </header>
-  <main>
-  <p>No note exists at this URL. It may have expired or never been created.</p>
-  <p><a class="button primary" href="/">Create a note</a></p>
-  </main>
-  ${FOOTER}
+  <div class="app-shell">
+    <header class="top-bar">
+      ${BRAND}
+      ${HEADER_ACTIONS}
+    </header>
+    <div class="app-body">
+      ${ACCOUNT_SIDEBAR}
+      <div class="main-area">
+        <div class="page-inner">
+          <main>
+          <h1>Not found</h1>
+          <p>No note exists at this URL. It may have expired or never been created.</p>
+          <p><a class="button primary" href="/">Create a note</a></p>
+          </main>
+          ${FOOTER}
+        </div>
+      </div>
+    </div>
+  </div>
+  ${SIDEBAR_JS}
   ${AUTH_CLIENT_JS}
   ${THEME_JS}
 </body>
