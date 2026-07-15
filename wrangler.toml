@@ -50,5 +50,10 @@ crons = ["0 * * * *"] # hourly: delete expired D1 paste metadata (+ KV keys)
 [observability.logs]
 enabled = true
 
+[[send_email]]
+name = "EMAIL"
+
 # Secrets via wrangler secret put:
-# AUTH_COOKIE_SECRET, RESEND_API_KEY
+# AUTH_COOKIE_SECRET
+# OTP email: Cloudflare Email Sending binding (EMAIL). Onboard zanile.com under
+# Email Service → Email Sending in the dashboard. RESEND_API_KEY can be removed.

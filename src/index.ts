@@ -8,7 +8,7 @@ export interface Env {
   AUTH_RATE_LIMITER: RateLimit;
   TRAFFIC: AnalyticsEngineDataset;
   AUTH_COOKIE_SECRET?: string;
-  RESEND_API_KEY?: string;
+  EMAIL?: SendEmail;
   ENVIRONMENT?: string;
 }
 
@@ -910,9 +910,9 @@ async function handleAuthRequest(request: Request, env: Env): Promise<Response> 
 
   const sent = await sendOtpEmail(env, email, code);
   if (!sent.ok) {
-    if (!env.RESEND_API_KEY && env.ENVIRONMENT !== 'production') {
+    if (!env.EMAIL && env.ENVIRONMENT !== 'production') {
       console.log(`[otp-dev] ${email} ${code}`);
-      return json({ success: true, message: 'Code generated. Check worker logs (local/dev without Resend).', dev: true });
+      return json({ success: true, message: 'Code generated. Check worker logs (local/dev without Email binding).', dev: true });
     }
     return json({ error: sent.error || 'Failed to send email' }, 502);
   }
@@ -983,25 +983,19 @@ async function ensureUser(env: Env, email: string): Promise<number> {
 }
 
 async function sendOtpEmail(env: Env, email: string, code: string): Promise<{ ok: boolean; error?: string }> {
-  if (!env.RESEND_API_KEY) return { ok: false, error: 'RESEND_API_KEY not set' };
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: 'zanile <auth@zanile.com>',
-      to: [email],
+  if (!env.EMAIL) return { ok: false, error: 'EMAIL binding not set' };
+  try {
+    await env.EMAIL.send({
+      from: { email: 'auth@zanile.com', name: 'zanile' },
+      to: email,
       subject: `Your login code: ${code}`,
       html: `<p>Your zanile.com sign-in code is <strong style="font-family:monospace;font-size:24px;letter-spacing:0.15em">${code}</strong>.</p><p>It expires in 10 minutes.</p>`,
-    }),
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    return { ok: false, error: `Resend ${response.status}: ${text.slice(0, 120)}` };
+    });
+    return { ok: true };
+  } catch (err) {
+    const e = err as { code?: string; message?: string };
+    return { ok: false, error: `Email ${e.code || 'error'}: ${(e.message || 'send failed').slice(0, 120)}` };
   }
-  return { ok: true };
 }
 
 async function getAuthUser(request: Request, env: Env): Promise<{ email: string } | null> {
