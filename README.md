@@ -22,7 +22,7 @@ npx wrangler deploy
 
 `wrangler.toml` has the production KV, D1, rate limit, cron, Analytics Engine, and `EMAIL` (`[[send_email]]`) bindings. After deploy, verify create/read on the live URL. Use `npx wrangler rollback` if production misbehaves.
 
-Secrets: `AUTH_COOKIE_SECRET` via `npx wrangler secret put AUTH_COOKIE_SECRET`. OTP from `auth@zanile.com` via Cloudflare Email Sending — onboard `zanile.com` under **Compute → Email Service → Email Sending**. Confirm in Workers Observability (`POST /auth/request`) and Email Service logs. After a successful production OTP send, delete obsolete `RESEND_API_KEY` if present.
+Secrets: shared `AUTH_COOKIE_SECRET` via account Secrets Store (`[[secrets_store_secrets]]`; `await env.AUTH_COOKIE_SECRET.get()`). OTP from `auth@zanile.com` via Cloudflare Email Sending — onboard `zanile.com` under **Compute → Email Service → Email Sending**. Confirm in Workers Observability (`POST /auth/request`) and Email Service logs.
 
 First-time KV (only if recreating): `npx wrangler kv namespace create NOTES`, then put the IDs into `wrangler.toml` and redeploy.
 

@@ -64,7 +64,11 @@ enabled = true
 [[send_email]]
 name = "EMAIL"
 
-# Secrets via wrangler secret put:
-# AUTH_COOKIE_SECRET
+# Shared AUTH_COOKIE_SECRET via account Secrets Store (same secret as zepiru/yera).
+[[secrets_store_secrets]]
+binding = "AUTH_COOKIE_SECRET"
+store_id = "5eea9eeab63b4448ac948224c1394be4"
+secret_name = "AUTH_COOKIE_SECRET"
+
 # OTP email: Cloudflare Email Sending binding (EMAIL). Onboard zanile.com under
-# Email Service → Email Sending in the dashboard. RESEND_API_KEY can be removed.
+# Email Service → Email Sending. Runtime: await env.AUTH_COOKIE_SECRET.get().

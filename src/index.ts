@@ -1,3 +1,6 @@
+/** Worker secret_text (string) or Secrets Store binding ({ get() }). */
+type SecretBinding = string | { get(): Promise<string> };
+
 export interface Env {
   NOTES: KVNamespace;
   DB: D1Database;
@@ -8,9 +11,16 @@ export interface Env {
   READ_RATE_LIMITER: RateLimit;
   AUTH_RATE_LIMITER: RateLimit;
   TRAFFIC: AnalyticsEngineDataset;
-  AUTH_COOKIE_SECRET?: string;
+  AUTH_COOKIE_SECRET?: SecretBinding;
   EMAIL?: SendEmail;
   ENVIRONMENT?: string;
+}
+
+async function resolveSecret(value: SecretBinding | undefined): Promise<string> {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value.get === 'function') return String((await value.get()) || '');
+  return '';
 }
 
 const AUTH_COOKIE = 'zanile_auth';
@@ -1032,7 +1042,7 @@ async function handleAuthRequest(request: Request, env: Env): Promise<Response> 
     if (!ipLimit.success) return json({ error: 'Too many requests from this network. Wait a minute and try again.' }, 429);
   }
 
-  if (!env.AUTH_COOKIE_SECRET) {
+  if (!(await resolveSecret(env.AUTH_COOKIE_SECRET))) {
     return json({ error: 'Auth is not configured (AUTH_COOKIE_SECRET).' }, 500);
   }
 
@@ -1070,7 +1080,8 @@ async function handleAuthVerify(request: Request, env: Env): Promise<Response> {
   if (!isValidEmail(email) || !/^\d{6}$/.test(code)) {
     return json({ error: 'Email and 6-digit code required' }, 400);
   }
-  if (!env.AUTH_COOKIE_SECRET) {
+  const authSecret = await resolveSecret(env.AUTH_COOKIE_SECRET);
+  if (!authSecret) {
     return json({ error: 'Auth is not configured.' }, 500);
   }
 
@@ -1104,7 +1115,7 @@ async function handleAuthVerify(request: Request, env: Env): Promise<Response> {
   await env.DB.prepare(`DELETE FROM otp_codes WHERE email = ?`).bind(email).run();
   await ensureUser(env, email);
 
-  const token = await createJwt({ email, exp: Math.floor(Date.now() / 1000) + AUTH_TTL_SEC }, env.AUTH_COOKIE_SECRET);
+  const token = await createJwt({ email, exp: Math.floor(Date.now() / 1000) + AUTH_TTL_SEC }, authSecret);
   const headers = new Headers({ 'Content-Type': 'application/json' });
   const secure = env.ENVIRONMENT === 'production' ? '; Secure' : '';
   headers.set('Set-Cookie', `${AUTH_COOKIE}=${token}; Path=/; HttpOnly${secure}; SameSite=Lax; Max-Age=${AUTH_TTL_SEC}`);
@@ -1144,8 +1155,9 @@ async function sendOtpEmail(env: Env, email: string, code: string): Promise<{ ok
 
 async function getAuthUser(request: Request, env: Env): Promise<{ email: string } | null> {
   const token = getCookie(request, AUTH_COOKIE);
-  if (!token || !env.AUTH_COOKIE_SECRET) return null;
-  return verifyJwt(token, env.AUTH_COOKIE_SECRET);
+  const secret = await resolveSecret(env.AUTH_COOKIE_SECRET);
+  if (!token || !secret) return null;
+  return verifyJwt(token, secret);
 }
 
 function getCookie(request: Request, name: string): string | null {
@@ -1283,7 +1295,7 @@ class LimitError extends Error {
 }
 
 async function hashIp(ip: string, env: Env): Promise<string> {
-  const pepper = env.AUTH_COOKIE_SECRET || 'zanile-ip-pepper';
+  const pepper = (await resolveSecret(env.AUTH_COOKIE_SECRET)) || 'zanile-ip-pepper';
   return sha256Hex(`${pepper}:${ip}`);
 }
 
