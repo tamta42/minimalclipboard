@@ -3,8 +3,9 @@ export interface Env {
   DB: D1Database;
   DEFAULT_TTL_SECONDS: number;
   MAX_BYTES: number;
-  WRITE_RATE_LIMIT_PER_HOUR: number;
   WRITE_RATE_LIMITER: RateLimit;
+  USER_WRITE_RATE_LIMITER: RateLimit;
+  READ_RATE_LIMITER: RateLimit;
   AUTH_RATE_LIMITER: RateLimit;
   TRAFFIC: AnalyticsEngineDataset;
   AUTH_COOKIE_SECRET?: string;
@@ -27,6 +28,16 @@ const TTL_OPTIONS: Record<string, number> = {
 };
 /** 16 random bytes → 128 bits of entropy (base64url). */
 const PASTE_ID_BYTES = 16;
+
+/** Anonymous create fair-use (D1). Exceeded → soft login_required. */
+const ANON_HOURLY_LIMIT = 10;
+const ANON_DAILY_LIMIT = 30;
+/** Authenticated create fair-use per email (D1). */
+const USER_HOURLY_LIMIT = 40;
+const USER_DAILY_LIMIT = 120;
+/** IP safety net for signed-in users. */
+const AUTH_IP_HOURLY_SAFETY = 60;
+const AUTH_IP_DAILY_SAFETY = 200;
 
 const THEME_BOOT = `
   <meta name="color-scheme" content="dark light" />
@@ -580,6 +591,24 @@ const AUTH_CLIENT_JS = `
     authErr.classList.toggle('ok', kind === 'ok');
   }
 
+  function promptSignIn(msg) {
+    setAuthMessage(msg || "You've reached the free limit — sign in to continue.", 'err');
+    var sidebar = document.getElementById('accountSidebar');
+    var headerBtn = document.getElementById('headerAccountBtn');
+    var expandBtn = document.getElementById('sidebarExpand');
+    if (window.matchMedia('(max-width: 800px)').matches) {
+      if (headerBtn) headerBtn.click();
+      else if (sidebar) sidebar.classList.add('is-open');
+    } else if (sidebar && sidebar.classList.contains('is-collapsed') && expandBtn) {
+      expandBtn.click();
+    }
+    if (emailInput) {
+      emailInput.focus();
+      try { emailInput.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {}
+    }
+  }
+  window.__promptSignIn = promptSignIn;
+
   function clearOtpCooldown() {
     if (otpCooldownTimer) {
       clearTimeout(otpCooldownTimer);
@@ -746,7 +775,7 @@ const HTML = `<!DOCTYPE html>
               <button id="save" class="primary" type="submit">Save</button>
               <button id="clear" class="secondary" type="button">Clear</button>
             </div>
-            <div class="note">Plain text only. Max 100 KB. Expires after 7 days by default (shorter optional). No forever.</div>
+            <div class="note">Plain text only. Max 100 KB. Expires after 7 days by default (shorter optional). No forever. Sign in for higher create limits.</div>
             <div id="result" class="link"></div>
             <div id="error" class="err"></div>
           </form>
@@ -779,7 +808,12 @@ const HTML = `<!DOCTYPE html>
       try {
         const res = await fetch('/api/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed');
+        if (!res.ok) {
+          if (data.code === 'login_required' && typeof window.__promptSignIn === 'function') {
+            window.__promptSignIn(data.error);
+          }
+          throw new Error(data.error || 'Failed');
+        }
         const url = data.url;
         result.innerHTML = '<a href="'+url+'">'+url+'</a>';
         history.replaceState(null, '', '/'+data.id);
@@ -857,28 +891,49 @@ async function handleRequest(request: Request, env: Env, path: string): Promise<
 
   if (request.method === 'POST' && path === '/api/create') {
     try {
-      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      const hourLimit = Number(env.WRITE_RATE_LIMIT_PER_HOUR) || 10;
+      const contentLength = Number(request.headers.get('Content-Length') || '0');
+      const maxBytes = Number(env.MAX_BYTES) || 100000;
+      // Soft pre-check (JSON overhead); hard check after encode.
+      if (contentLength > maxBytes + 4096) {
+        return json({ error: `Paste too large. Maximum size is ${maxBytes} bytes (100 KB).` }, 413);
+      }
 
-      // Burst: native Workers rate limit (period must be 10 or 60s).
-      if (env.WRITE_RATE_LIMITER) {
-        const { success } = await env.WRITE_RATE_LIMITER.limit({ key: ip });
+      const user = await getAuthUser(request, env);
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const ipHash = await hashIp(ip, env);
+
+      if (user) {
+        if (env.USER_WRITE_RATE_LIMITER) {
+          const { success } = await env.USER_WRITE_RATE_LIMITER.limit({ key: `user:${user.email}` });
+          if (!success) {
+            return json({ error: 'Too many requests. Slow down and try again.', code: 'rate_limit' }, 429);
+          }
+        }
+      } else if (env.WRITE_RATE_LIMITER) {
+        const { success } = await env.WRITE_RATE_LIMITER.limit({ key: `anon:${ipHash}` });
         if (!success) {
-          return json({ error: `Too many requests. Paste creation is limited to ${hourLimit} per hour.` }, 429);
+          return json(
+            {
+              error: 'Too many requests. Slow down — or sign in for a higher limit.',
+              code: 'login_required',
+            },
+            401,
+          );
         }
       }
 
-      // Hourly: NOTES KV counter (native binding cannot do a 1-hour period).
-      const hourlyOk = await checkHourlyWriteLimit(env, ip, hourLimit);
-      if (!hourlyOk) {
-        return json({ error: `Too many requests. Paste creation is limited to ${hourLimit} per hour.` }, 429);
+      try {
+        await assertCreateFairUse(env, ipHash, user?.email || null);
+      } catch (err) {
+        if (err instanceof LimitError) {
+          return json({ error: err.message, code: err.code }, err.status);
+        }
+        return json({ error: 'Rate limit check failed. Try again shortly.' }, 503);
       }
 
       const body = await request.json<any>();
       const text: string = typeof body?.text === 'string' ? body.text : '';
-      if (!text) return json({ error: 'Text is required' }, 400);
-      // Plain text only — reject non-string payloads already handled; no file uploads.
-      const maxBytes = Number(env.MAX_BYTES) || 100000;
+      if (!text || !text.trim()) return json({ error: 'Text is required' }, 400);
       const size = new TextEncoder().encode(text).byteLength;
       if (size > maxBytes) {
         return json({ error: `Paste too large. Maximum size is ${maxBytes} bytes (100 KB).` }, 413);
@@ -890,7 +945,6 @@ async function handleRequest(request: Request, env: Env, path: string): Promise<
 
       await env.NOTES.put(id, text, { expirationTtl: Math.max(ttlSeconds, 60) });
 
-      const user = await getAuthUser(request, env);
       if (user) {
         const userId = await ensureUser(env, user.email);
         const preview = text.replace(/\s+/g, ' ').trim().slice(0, 80);
@@ -912,6 +966,8 @@ async function handleRequest(request: Request, env: Env, path: string): Promise<
   if (request.method === 'GET' && path.startsWith('/raw/')) {
     const id = path.slice('/raw/'.length);
     if (!isPasteId(id)) return plainNotFound();
+    const readLimited = await assertReadRateLimit(request, env, false);
+    if (readLimited) return readLimited;
     const value = await env.NOTES.get(id);
     if (value == null) return plainNotFound();
     return new Response(value, {
@@ -935,6 +991,8 @@ async function handleRequest(request: Request, env: Env, path: string): Promise<
       return html(renderNotFoundPage(), 404);
     }
     if (!isPasteId(id)) return html(renderNotFoundPage(), 404);
+    const readLimited = await assertReadRateLimit(request, env, true);
+    if (readLimited) return readLimited;
     const value = await env.NOTES.get(id);
     if (value == null) return html(renderNotFoundPage(), 404);
     return html(renderViewPage(id, value, request.url), 200, { 'X-Robots-Tag': 'noindex' });
@@ -967,8 +1025,11 @@ async function handleAuthRequest(request: Request, env: Env): Promise<Response> 
   if (!isValidEmail(email)) return json({ error: 'Valid email required' }, 400);
 
   if (env.AUTH_RATE_LIMITER) {
-    const { success } = await env.AUTH_RATE_LIMITER.limit({ key: email });
-    if (!success) return json({ error: 'Too many requests. Wait a minute and try again.' }, 429);
+    const ipHash = await hashIp(request.headers.get('CF-Connecting-IP') || 'unknown', env);
+    const emailLimit = await env.AUTH_RATE_LIMITER.limit({ key: `email:${email}` });
+    if (!emailLimit.success) return json({ error: 'Too many requests. Wait a minute and try again.' }, 429);
+    const ipLimit = await env.AUTH_RATE_LIMITER.limit({ key: `ip:${ipHash}` });
+    if (!ipLimit.success) return json({ error: 'Too many requests from this network. Wait a minute and try again.' }, 429);
   }
 
   if (!env.AUTH_COOKIE_SECRET) {
@@ -1011,6 +1072,11 @@ async function handleAuthVerify(request: Request, env: Env): Promise<Response> {
   }
   if (!env.AUTH_COOKIE_SECRET) {
     return json({ error: 'Auth is not configured.' }, 500);
+  }
+
+  if (env.AUTH_RATE_LIMITER) {
+    const { success } = await env.AUTH_RATE_LIMITER.limit({ key: `verify:${email}` });
+    if (!success) return json({ error: 'Too many attempts. Wait a minute and try again.' }, 429);
   }
 
   const row = await env.DB.prepare(
@@ -1206,13 +1272,105 @@ function resolveTtlSeconds(raw: unknown, env: Env): number {
   return Math.min(fallback, TTL_7D);
 }
 
-async function checkHourlyWriteLimit(env: Env, ip: string, limit: number): Promise<boolean> {
-  const hour = new Date().toISOString().slice(0, 13); // YYYY-MM-DDTHH UTC
-  const key = `rl:write:${ip}:${hour}`;
-  const current = Number.parseInt((await env.NOTES.get(key)) || '0', 10) || 0;
-  if (current >= limit) return false;
-  await env.NOTES.put(key, String(current + 1), { expirationTtl: 3600 });
-  return true;
+class LimitError extends Error {
+  status: number;
+  code: string;
+  constructor(message: string, status: number, code: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+async function hashIp(ip: string, env: Env): Promise<string> {
+  const pepper = env.AUTH_COOKIE_SECRET || 'zanile-ip-pepper';
+  return sha256Hex(`${pepper}:${ip}`);
+}
+
+function utcDay(d = new Date()): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function utcHour(d = new Date()): string {
+  return d.toISOString().slice(0, 13);
+}
+
+async function incrementCounter(env: Env, key: string): Promise<number> {
+  const now = new Date().toISOString();
+  const row = await env.DB.prepare(
+    `INSERT INTO ip_counters (key, count, updated_at) VALUES (?, 1, ?)
+     ON CONFLICT(key) DO UPDATE SET count = count + 1, updated_at = excluded.updated_at
+     RETURNING count`,
+  )
+    .bind(key, now)
+    .first<{ count: number }>();
+  if (!row || typeof row.count !== 'number') {
+    throw new Error('ip_counters unreadable');
+  }
+  return row.count;
+}
+
+/** Fair-use via D1. Anon → login_required; auth → fair_use_limit. */
+async function assertCreateFairUse(env: Env, ipHash: string, email: string | null): Promise<void> {
+  const hour = utcHour();
+  const day = utcDay();
+
+  if (!email) {
+    const hourCount = await incrementCounter(env, `ah:${hour}:${ipHash}`);
+    if (hourCount > ANON_HOURLY_LIMIT) {
+      throw new LimitError(
+        "You've reached the free hourly limit — sign in to continue.",
+        401,
+        'login_required',
+      );
+    }
+    const dayCount = await incrementCounter(env, `ad:${day}:${ipHash}`);
+    if (dayCount > ANON_DAILY_LIMIT) {
+      throw new LimitError(
+        "You've reached the free daily limit — sign in to continue.",
+        401,
+        'login_required',
+      );
+    }
+    return;
+  }
+
+  const emailKey = await sha256Hex(email);
+  const userHour = await incrementCounter(env, `uh:${hour}:${emailKey}`);
+  if (userHour > USER_HOURLY_LIMIT) {
+    throw new LimitError('Fair-use hourly limit reached. Try again in a bit.', 429, 'fair_use_limit');
+  }
+  const userDay = await incrementCounter(env, `ud:${day}:${emailKey}`);
+  if (userDay > USER_DAILY_LIMIT) {
+    throw new LimitError('Fair-use daily limit reached. Try again tomorrow.', 429, 'fair_use_limit');
+  }
+
+  const ipHour = await incrementCounter(env, `ih:${hour}:${ipHash}`);
+  if (ipHour > AUTH_IP_HOURLY_SAFETY) {
+    throw new LimitError('Network fair-use limit reached. Try again later.', 429, 'fair_use_limit');
+  }
+  const ipDay = await incrementCounter(env, `id:${day}:${ipHash}`);
+  if (ipDay > AUTH_IP_DAILY_SAFETY) {
+    throw new LimitError('Network fair-use daily limit reached. Try again tomorrow.', 429, 'fair_use_limit');
+  }
+}
+
+async function assertReadRateLimit(
+  request: Request,
+  env: Env,
+  asHtml: boolean,
+): Promise<Response | null> {
+  if (!env.READ_RATE_LIMITER) return null;
+  const ipHash = await hashIp(request.headers.get('CF-Connecting-IP') || 'unknown', env);
+  const { success } = await env.READ_RATE_LIMITER.limit({ key: `read:${ipHash}` });
+  if (success) return null;
+  if (asHtml) {
+    return new Response('Too many requests. Slow down and try again.', {
+      status: 429,
+      headers: { 'content-type': 'text/plain; charset=UTF-8', 'X-Robots-Tag': 'noindex' },
+    });
+  }
+  return json({ error: 'Too many requests. Slow down and try again.', code: 'rate_limit' }, 429);
 }
 
 async function cleanupExpiredPastes(env: Env): Promise<void> {

@@ -16,6 +16,7 @@ Requires Node 18+ and a Cloudflare account (`npx wrangler login`).
 ## Deploy
 
 ```bash
+npx wrangler d1 execute zanile-auth --remote --file=schema.abuse.sql
 npx wrangler deploy
 ```
 
@@ -25,12 +26,27 @@ Secrets: `AUTH_COOKIE_SECRET` via `npx wrangler secret put AUTH_COOKIE_SECRET`. 
 
 First-time KV (only if recreating): `npx wrangler kv namespace create NOTES`, then put the IDs into `wrangler.toml` and redeploy.
 
+## Fair-use / abuse protection
+
+| Layer | Mechanism | Threshold |
+| --- | --- | --- |
+| Anon create burst | `WRITE_RATE_LIMITER` | 10 / 60s per IP hash |
+| Auth create burst | `USER_WRITE_RATE_LIMITER` | 30 / 60s per email |
+| Anon hourly / daily | D1 `ip_counters` | **10 / hour · 30 / day** per IP → soft `401` + `login_required` |
+| Auth hourly / daily | D1 `ip_counters` | **40 / hour · 120 / day** per email → `429` + `fair_use_limit` |
+| Auth IP safety | D1 `ip_counters` | **60 / hour · 200 / day** per IP → `429` + `fair_use_limit` |
+| Paste reads | `READ_RATE_LIMITER` | 120 / 60s per IP (`/{id}`, `/raw/{id}`) |
+| OTP request | `AUTH_RATE_LIMITER` | 5 / 60s per email **and** per IP |
+| OTP verify | `AUTH_RATE_LIMITER` | 5 / 60s per email |
+
+Anon over-limit responses nudge sign-in (`code: "login_required"`). Apply `schema.abuse.sql` for the `ip_counters` table.
+
 ## Behaviour
 
-- Plain text only. Max 100 KB per paste (`MAX_BYTES`).
+- Plain text only. Max 100 KB per paste (`MAX_BYTES`). Empty / whitespace-only rejected.
 - Default TTL 7 days (`DEFAULT_TTL_SECONDS`); optional 1 hour / 1 day. No forever.
 - Hourly cron cleans expired D1 paste metadata (KV TTL deletes content).
-- Create limited to 10/IP/hour (KV counter) plus native 10/60s burst (`WRITE_RATE_LIMITER`).
 - Paste IDs are random (≥128 bits). No public listing; optional signed-in “your pastes” (email OTP).
 - Paste pages: `noindex` meta + `X-Robots-Tag`. Homepage stays indexable.
+- Abuse reports: `mailto:abuse@zanile.com`.
 - Raw text: `/raw/{id}`. Pages: `/`, `/about`, `/privacy`, `/robots.txt`.

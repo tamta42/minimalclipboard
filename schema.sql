@@ -23,3 +23,9 @@ CREATE TABLE IF NOT EXISTS pastes (
 
 CREATE INDEX IF NOT EXISTS idx_pastes_user_id ON pastes(user_id);
 CREATE INDEX IF NOT EXISTS idx_pastes_expires_at ON pastes(expires_at);
+
+CREATE TABLE IF NOT EXISTS ip_counters (
+  key TEXT PRIMARY KEY,
+  count INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
