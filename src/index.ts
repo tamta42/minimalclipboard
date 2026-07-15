@@ -207,6 +207,8 @@ const AUTH_CSS = `
   }
   .auth-box .btn.secondary { background: transparent; color: var(--tt-blue); border-color: var(--tt-line); }
   .auth-box .err { color: var(--tt-clay); font-size: 0.75rem; margin: 0; min-height: 0; }
+  .auth-box .err.ok { color: var(--tt-muted); }
+  .auth-box .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .auth-box .signed-email { font-size: 0.8rem; margin: 0; word-break: break-all; color: var(--tt-ink); }
   .saved-panel { display: none; padding-top: 0.75rem; border-top: 1px solid var(--tt-line); }
   .saved-panel.visible { display: block; }
@@ -423,7 +425,7 @@ const AUTH_BOX = `
       <input type="text" id="authCode" placeholder="6-digit code" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
       <button type="button" class="btn" id="verifyCode" style="margin-top:0.35rem">Verify</button>
     </div>
-    <p class="err" id="authErr"></p>
+    <p class="err" id="authErr" role="status" aria-live="polite"></p>
   </div>
   <div id="authSignedIn" style="display:none">
     <p class="signed-email" id="signedEmail"></p>
@@ -565,7 +567,49 @@ const AUTH_CLIENT_JS = `
   const signedEmail = document.getElementById('signedEmail');
   const savedPanel = document.getElementById('savedPanel');
   const savedList = document.getElementById('savedList');
-  if (!authErr) return;
+  const requestBtn = document.getElementById('requestCode');
+  const emailInput = document.getElementById('authEmail');
+  if (!authErr || !requestBtn) return;
+
+  const RESEND_COOLDOWN_S = 60;
+  let otpSending = false;
+  let otpCooldownTimer = null;
+
+  function setAuthMessage(msg, kind) {
+    authErr.textContent = msg || '';
+    authErr.classList.toggle('ok', kind === 'ok');
+  }
+
+  function clearOtpCooldown() {
+    if (otpCooldownTimer) {
+      clearTimeout(otpCooldownTimer);
+      otpCooldownTimer = null;
+    }
+  }
+
+  function resetRequestBtn() {
+    requestBtn.disabled = false;
+    requestBtn.textContent = 'Send code';
+    requestBtn.removeAttribute('aria-busy');
+  }
+
+  function startOtpCooldown(seconds) {
+    clearOtpCooldown();
+    var left = seconds;
+    requestBtn.disabled = true;
+    requestBtn.setAttribute('aria-busy', 'false');
+    function tick() {
+      if (left <= 0) {
+        resetRequestBtn();
+        otpCooldownTimer = null;
+        return;
+      }
+      requestBtn.textContent = 'Resend in ' + left + 's';
+      left -= 1;
+      otpCooldownTimer = setTimeout(tick, 1000);
+    }
+    tick();
+  }
 
   async function refreshMe() {
     const res = await fetch('/api/me');
@@ -597,31 +641,65 @@ const AUTH_CLIENT_JS = `
     }).join('') + '</ul>';
   }
 
-  document.getElementById('requestCode').onclick = async function () {
-    authErr.textContent = '';
-    const email = document.getElementById('authEmail').value.trim();
-    const res = await fetch('/auth/request', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
-    });
-    const data = await res.json();
-    if (!res.ok) { authErr.textContent = data.error || 'Failed'; return; }
-    codeRow.style.display = 'block';
-    if (data.dev) authErr.textContent = 'Local/dev: check wrangler logs for the code.';
-  };
+  async function requestCode() {
+    if (otpSending || requestBtn.disabled) return;
+    setAuthMessage('', '');
+    const email = emailInput.value.trim();
+    if (!email) {
+      setAuthMessage('Enter your email address.', 'err');
+      return;
+    }
+    otpSending = true;
+    requestBtn.disabled = true;
+    requestBtn.setAttribute('aria-busy', 'true');
+    requestBtn.textContent = 'Sending…';
+    try {
+      const res = await fetch('/auth/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json().catch(function () { return {}; });
+      if (!res.ok) {
+        setAuthMessage(data.error || 'Failed to send code.', 'err');
+        resetRequestBtn();
+        return;
+      }
+      codeRow.style.display = 'block';
+      setAuthMessage(
+        data.dev
+          ? 'Local/dev: check wrangler logs for the code.'
+          : (data.message || 'Code sent — check your inbox.'),
+        'ok'
+      );
+      startOtpCooldown(RESEND_COOLDOWN_S);
+    } catch (e) {
+      setAuthMessage('Failed to send code. Please try again.', 'err');
+      resetRequestBtn();
+    } finally {
+      otpSending = false;
+    }
+  }
+
+  requestBtn.onclick = requestCode;
+  emailInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      requestCode();
+    }
+  });
 
   document.getElementById('verifyCode').onclick = async function () {
-    authErr.textContent = '';
-    const email = document.getElementById('authEmail').value.trim();
+    setAuthMessage('', '');
+    const email = emailInput.value.trim();
     const code = document.getElementById('authCode').value.trim();
     const res = await fetch('/auth/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, code })
     });
-    const data = await res.json();
-    if (!res.ok) { authErr.textContent = data.error || 'Failed'; return; }
+    const data = await res.json().catch(function () { return {}; });
+    if (!res.ok) { setAuthMessage(data.error || 'Failed', 'err'); return; }
     await refreshMe();
   };
 
